@@ -1,0 +1,36 @@
+{
+  "name": "sdwhub-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SDW.hub 2026 | Dashboard Real Time — landing page do maior evento de negócios, inovação e tecnologia da Baixada Santista.",
+  "scripts": {
+    "dev": "next dev",
+    "optimize-images": "node scripts/optimize-images.mjs",
+    "build": "node scripts/optimize-images.mjs && node --max-old-space-size=1536 node_modules/next/dist/bin/next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/genai": "latest",
+    "@phosphor-icons/react": "latest",
+    "clsx": "latest",
+    "embla-carousel-autoplay": "latest",
+    "embla-carousel-react": "latest",
+    "motion": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwind-merge": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "sharp": "latest",
+    "tailwindcss": "latest",
+    "typescript": "latest"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "SDW.hub 2026 | Dashboard Real Time",
+  "short_name": "SDW.hub",
+  "description": "O maior evento de negócios, inovação e tecnologia da Baixada Santista.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#492b92",
+  "background_color": "#fdfcfb",
+  "icons": [
+    {
+      "src": "/images/sdw-logo-purple.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

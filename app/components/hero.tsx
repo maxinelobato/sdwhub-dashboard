@@ -1,0 +1,631 @@
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  UsersThreeIcon,
+  TargetIcon,
+  CurrencyDollarIcon,
+  TrendUpIcon,
+  TrendDownIcon,
+  MinusIcon,
+  ArrowsClockwiseIcon,
+  WarningCircleIcon,
+  ClockIcon,
+} from '@phosphor-icons/react/ssr';
+import { fetchLeads, type Lead, type ParsedLeads } from '@/lib/sheets';
+import { FetcherError } from '@/lib/fetcher';
+import {
+  PERIOD_LABELS,
+  PERIOD_ORDER,
+  isWithin,
+  rangeFor,
+  startOfDay,
+  addDays,
+  formatTimeAgo,
+  type PeriodKey,
+} from '@/lib/date-utils';
+import { cn } from '@/lib/utils';
+
+const REFRESH_MS = 30_000;
+
+const formatCurrencyBR = (value: number) =>
+  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+
+const ease = [0.21, 0.47, 0.32, 0.98] as const;
+
+type DistEntry = { label: string; count: number };
+
+function topBy(leads: Lead[], key: keyof Lead, max = 5): DistEntry[] {
+  const map = new Map<string, number>();
+  for (const lead of leads) {
+    const value = String(lead[key] ?? '').trim();
+    if (!value) continue;
+    map.set(value, (map.get(value) ?? 0) + 1);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([label, count]) => ({ label, count }));
+}
+
+function leadsByDay(leads: Lead[], days: number): { day: Date; count: number; label: string }[] {
+  const result: { day: Date; count: number; label: string }[] = [];
+  const today = startOfDay();
+  for (let i = days - 1; i >= 0; i--) {
+    const day = addDays(today, -i);
+    const next = addDays(day, 1);
+    const count = leads.filter(
+      (l) =>
+        l.timestamp && l.timestamp.getTime() >= day.getTime() && l.timestamp.getTime() < next.getTime(),
+    ).length;
+    result.push({
+      day,
+      count,
+      label: day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', ''),
+    });
+  }
+  return result;
+}
+
+export const Hero = () => {
+  const [period, setPeriod] = useState<PeriodKey>('today');
+  const [data, setData] = useState<ParsedLeads | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
+
+  const prevLeadIdsRef = useRef<Set<number>>(new Set());
+  const isFirstLoadRef = useRef(true);
+  const [flashKey, setFlashKey] = useState(0);
+  const [newLeadIds, setNewLeadIds] = useState<Set<number>>(new Set());
+  const [toastCount, setToastCount] = useState(0);
+
+  const csvUrl = process.env.NEXT_PUBLIC_LEADS_CSV_URL;
+  const dailyBudget = Number(process.env.NEXT_PUBLIC_DAILY_BUDGET ?? 0);
+  const dailyGoal = Number(process.env.NEXT_PUBLIC_LEADS_DAILY_GOAL ?? 10);
+
+  const load = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await fetchLeads(csvUrl);
+      setData(result);
+    } catch (e) {
+      const msg =
+        e instanceof FetcherError
+          ? `Falha ao sincronizar (${e.status})`
+          : e instanceof Error
+            ? e.message
+            : 'Erro desconhecido';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [csvUrl]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      load();
+      setNow(new Date());
+    }, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [load]);
+
+  useEffect(() => {
+    if (!data) return;
+    const allIds = new Set(data.leads.map((l) => l.rowIndex));
+    if (isFirstLoadRef.current) {
+      isFirstLoadRef.current = false;
+      prevLeadIdsRef.current = allIds;
+      return;
+    }
+    const newIds = new Set([...allIds].filter((id) => !prevLeadIdsRef.current.has(id)));
+    prevLeadIdsRef.current = allIds;
+    if (newIds.size === 0) return;
+    setFlashKey((k) => k + 1);
+    setNewLeadIds(newIds);
+    setToastCount(newIds.size);
+    const t = setTimeout(() => {
+      setNewLeadIds(new Set());
+      setToastCount(0);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [data]);
+
+  const hasTimestamp = data?.hasTimestamp ?? false;
+  const withTimestamp = data?.withTimestamp ?? 0;
+  const total = data?.totalRows ?? 0;
+  /** Coluna Timestamp existe MAS nenhuma linha tem valor — precisa backfill. */
+  const timestampEmpty = hasTimestamp && total > 0 && withTimestamp === 0;
+  /** Pode usar filtros por período de fato (coluna existe + ao menos 1 linha preenchida). */
+  const canFilterByDate = hasTimestamp && withTimestamp > 0;
+
+  const todayLeads = useMemo(() => {
+    if (!data) return [];
+    const range = rangeFor('today', now);
+    return data.leads.filter((l) => isWithin(l.timestamp, range));
+  }, [data, now]);
+
+  const yesterdayLeads = useMemo(() => {
+    if (!data) return [];
+    const range = rangeFor('yesterday', now);
+    return data.leads.filter((l) => isWithin(l.timestamp, range));
+  }, [data, now]);
+
+  const periodLeads = useMemo(() => {
+    if (!data) return [];
+    const range = rangeFor(period, now);
+    return data.leads.filter((l) => isWithin(l.timestamp, range));
+  }, [data, now, period]);
+
+  const todayCount = canFilterByDate ? todayLeads.length : total;
+  const yesterdayCount = yesterdayLeads.length;
+  const periodCount = canFilterByDate ? periodLeads.length : total;
+  const trend: 'up' | 'down' | 'flat' =
+    todayCount > yesterdayCount ? 'up' : todayCount < yesterdayCount ? 'down' : 'flat';
+  const TrendIcon = trend === 'up' ? TrendUpIcon : trend === 'down' ? TrendDownIcon : MinusIcon;
+  const trendDelta = todayCount - yesterdayCount;
+
+  const goalProgress = dailyGoal > 0 ? Math.min(100, (todayCount / dailyGoal) * 100) : 0;
+  const cpl = periodCount > 0 && dailyBudget > 0 ? dailyBudget / periodCount : 0;
+
+  const last7 = useMemo(() => leadsByDay(data?.leads ?? [], 7), [data]);
+  const maxBar = Math.max(1, ...last7.map((d) => d.count));
+
+  const recent = useMemo(() => {
+    const list = (data?.leads ?? []).slice();
+    if (canFilterByDate) {
+      list.sort((a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0));
+    } else {
+      list.reverse();
+    }
+    return list.slice(0, 6);
+  }, [data, canFilterByDate]);
+
+  const byFaturamento = useMemo(
+    () => topBy(periodLeads.length ? periodLeads : data?.leads ?? [], 'faturamento', 5),
+    [periodLeads, data],
+  );
+  const byMercado = useMemo(
+    () => topBy(periodLeads.length ? periodLeads : data?.leads ?? [], 'mercado', 5),
+    [periodLeads, data],
+  );
+  const maxFat = Math.max(1, ...byFaturamento.map((e) => e.count));
+
+  return (
+    <>
+      <AnimatePresence>
+        {toastCount > 0 && (
+          <motion.div
+            key={flashKey}
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 bg-emerald-500 text-white rounded-2xl shadow-2xl shadow-emerald-500/40 pointer-events-none"
+          >
+            <UsersThreeIcon size={18} weight="bold" />
+            <span className="text-sm font-black">
+              +{toastCount} novo{toastCount > 1 ? 's' : ''} lead{toastCount > 1 ? 's' : ''}!
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <section className="min-h-screen bg-brand-dark-blue text-white px-6 md:px-10 py-8 md:py-10">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-4">
+          <Image
+            src="/images/sdw-logo-gold.png"
+            alt="SDW.hub"
+            width={56}
+            height={56}
+            priority
+            className="h-12 w-auto"
+          />
+          <div>
+            <span className="text-brand-cream font-black uppercase tracking-[0.3em] text-[10px] block">
+              SDW.hub 2026 · Dashboard Real Time
+            </span>
+            <h1 className="font-display text-2xl md:text-3xl font-black uppercase tracking-tighter">
+              Leads do Typebot
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            role="tablist"
+            aria-label="Filtro de período"
+            className="inline-flex flex-wrap gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
+          >
+            {PERIOD_ORDER.map((p) => {
+              const active = period === p;
+              return (
+                <button
+                  key={p}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPeriod(p)}
+                  className={cn(
+                    'relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
+                    active ? 'text-brand-dark-blue' : 'text-white/60 hover:text-white',
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="period-pill"
+                      className="absolute inset-0 bg-brand-cream rounded-full"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{PERIOD_LABELS[p]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              load();
+            }}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full bg-brand-purple hover:bg-brand-purple-dark transition-colors disabled:opacity-60"
+          >
+            <motion.span
+              animate={loading ? { rotate: 360 } : { rotate: 0 }}
+              transition={loading ? { repeat: Infinity, duration: 1, ease: 'linear' } : undefined}
+            >
+              <ArrowsClockwiseIcon size={12} weight="bold" />
+            </motion.span>
+            Atualizar
+          </button>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-6 flex items-start gap-3 px-5 py-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-200"
+          >
+            <WarningCircleIcon size={18} weight="duotone" />
+            <span className="text-xs font-semibold">{error}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!hasTimestamp && data && (
+        <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
+          <WarningCircleIcon size={18} weight="duotone" />
+          <span className="text-xs font-semibold">
+            Adicione a coluna <code className="font-mono">Timestamp</code> na planilha para liberar
+            filtros por período. Métricas exibem o total geral até lá.
+          </span>
+        </div>
+      )}
+
+      {timestampEmpty && (
+        <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
+          <WarningCircleIcon size={18} weight="duotone" />
+          <div className="text-xs font-semibold leading-relaxed">
+            Coluna <code className="font-mono">Timestamp</code> detectada, mas todas as {total}{' '}
+            linhas estão vazias.{' '}
+            <span className="text-white/80">
+              Faça o backfill (Apps Script: Extensões → Apps Script → função{' '}
+              <code className="font-mono">setup</code>) ou preencha manualmente as células.
+            </span>
+            <span className="block mt-1 text-amber-200/70">
+              Filtros por período só ativam após carimbar pelo menos 1 lead.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KpiCard
+          label="Total de Leads Hoje"
+          value={todayCount}
+          icon={<UsersThreeIcon size={18} weight="bold" />}
+          accent="bg-brand-purple"
+          loading={loading && !data}
+          delay={0}
+          flash={flashKey > 0}
+          flashKey={flashKey}
+        />
+        <KpiCard
+          label="Hoje vs. Ontem"
+          value={`${todayCount}`}
+          subValue={
+            canFilterByDate
+              ? `Ontem: ${yesterdayCount}`
+              : timestampEmpty
+                ? 'Backfill pendente'
+                : 'Sem coluna de data'
+          }
+          icon={<TrendIcon size={18} weight="bold" />}
+          accent={trend === 'up' ? 'bg-emerald-500' : trend === 'down' ? 'bg-rose-500' : 'bg-white/20'}
+          delta={canFilterByDate ? trendDelta : undefined}
+          loading={loading && !data}
+          delay={0.05}
+        />
+        <KpiCard
+          label="Meta diária"
+          value={`${todayCount}/${dailyGoal}`}
+          subValue={`${goalProgress.toFixed(0)}% concluído`}
+          icon={<TargetIcon size={18} weight="bold" />}
+          accent="bg-brand-cream text-brand-dark-blue"
+          progress={goalProgress}
+          loading={loading && !data}
+          delay={0.1}
+        />
+        <KpiCard
+          label="CPL Atual"
+          value={cpl > 0 ? formatCurrencyBR(cpl) : '—'}
+          subValue={
+            dailyBudget > 0
+              ? `${formatCurrencyBR(dailyBudget)} · ${periodCount} leads`
+              : 'Configure o orçamento'
+          }
+          icon={<CurrencyDollarIcon size={18} weight="bold" />}
+          accent="bg-brand-blue"
+          loading={loading && !data}
+          delay={0.15}
+        />
+      </div>
+
+      {/* Bottom row: 3 panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Bar chart - Leads / day */}
+        <Panel title="Leads / dia" subtitle="Últimos 7 dias" delay={0.2}>
+          {!canFilterByDate ? (
+            <p className="text-white/40 text-xs font-medium leading-relaxed">
+              {timestampEmpty
+                ? 'Coluna Timestamp vazia — preencha as linhas para ativar o histórico diário.'
+                : 'Adicione a coluna Timestamp para visualizar o histórico diário.'}
+            </p>
+          ) : (
+            <div className="flex items-end justify-between gap-2 h-40 mt-4">
+              {last7.map((d) => {
+                const heightPct = (d.count / maxBar) * 100;
+                return (
+                  <div key={d.day.toISOString()} className="flex-1 flex flex-col items-center gap-2">
+                    <div className="relative w-full flex-1 flex items-end">
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${heightPct}%` }}
+                        transition={{ duration: 0.8, ease, delay: 0.3 }}
+                        className="w-full bg-gradient-to-t from-brand-purple to-brand-cream rounded-t-md min-h-[2px]"
+                      />
+                      {d.count > 0 && (
+                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black text-brand-cream">
+                          {d.count}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-white/40">
+                      {d.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+
+        {/* Recently created */}
+        <Panel
+          title="Leads recentes"
+          subtitle={canFilterByDate ? 'Ordenados por chegada' : 'Ordem da planilha'}
+          delay={0.25}
+        >
+          <ul className="space-y-3 mt-2">
+            {recent.length === 0 && (
+              <li className="text-white/40 text-xs font-medium">Nenhum lead ainda.</li>
+            )}
+            {recent.map((lead, i) => {
+              const isNew = newLeadIds.has(lead.rowIndex);
+              return (
+              <motion.li
+                key={`${lead.rowIndex}-${lead.nome}`}
+                initial={{ opacity: 0, x: isNew ? 0 : -10, backgroundColor: isNew ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0)' }}
+                animate={{ opacity: 1, x: 0, backgroundColor: 'rgba(0,0,0,0)' }}
+                transition={{
+                  opacity: { duration: 0.4, delay: isNew ? 0 : 0.3 + i * 0.05, ease },
+                  x: { duration: 0.4, delay: isNew ? 0 : 0.3 + i * 0.05, ease },
+                  backgroundColor: { duration: 3, ease: 'easeOut' },
+                }}
+                className="flex items-center justify-between gap-3 pb-3 border-b border-white/5 last:border-0 rounded-lg -mx-1 px-1"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm text-white truncate">{lead.nome || '—'}</p>
+                  <p className="text-[11px] text-white/40 font-medium truncate">
+                    {lead.redeSocial || lead.email || '—'}
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand-cream whitespace-nowrap">
+                  <ClockIcon size={11} weight="bold" />
+                  {canFilterByDate ? formatTimeAgo(lead.timestamp, now) : `#${lead.rowIndex + 1}`}
+                </span>
+              </motion.li>
+              );
+            })}
+          </ul>
+        </Panel>
+
+        {/* Distribution by faturamento */}
+        <Panel
+          title="Por faturamento"
+          subtitle={`${periodCount} leads · ${PERIOD_LABELS[period]}`}
+          delay={0.3}
+        >
+          <ul className="space-y-3 mt-2">
+            {byFaturamento.length === 0 && (
+              <li className="text-white/40 text-xs font-medium">Sem dados no período.</li>
+            )}
+            {byFaturamento.map((entry, i) => {
+              const pct = (entry.count / maxFat) * 100;
+              return (
+                <li key={entry.label} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-white/80 font-semibold truncate">{entry.label}</span>
+                    <span className="text-brand-cream font-black">{entry.count}</span>
+                  </div>
+                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.8, delay: 0.35 + i * 0.05, ease }}
+                      className="h-full bg-gradient-to-r from-brand-purple via-brand-rose to-brand-cream rounded-full"
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {byMercado.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-white/5">
+              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 block mb-3">
+                Top mercados
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {byMercado.map((m) => (
+                  <span
+                    key={m.label}
+                    className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold"
+                  >
+                    {m.label}
+                    <span className="text-brand-cream font-black">{m.count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <footer className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+        <span>Total geral: {total} leads</span>
+        <span>Sincronização automática a cada {REFRESH_MS / 1000}s</span>
+        <span>
+          Última atualização:{' '}
+          <span className="text-brand-cream">{formatTimeAgo(data?.fetchedAt ?? null, now)}</span>
+        </span>
+      </footer>
+    </section>
+    </>
+  );
+};
+
+type KpiCardProps = {
+  label: string;
+  value: string | number;
+  subValue?: string;
+  icon?: React.ReactNode;
+  accent?: string;
+  delta?: number;
+  progress?: number;
+  loading?: boolean;
+  delay?: number;
+  flash?: boolean;
+  flashKey?: number;
+};
+
+const KpiCard = ({
+  label,
+  value,
+  subValue,
+  icon,
+  accent = 'bg-brand-purple',
+  delta,
+  progress,
+  loading,
+  delay = 0,
+}: KpiCardProps) => (
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, delay, ease }}
+    className="relative bg-white/[0.04] border border-white/10 rounded-2xl p-5 overflow-hidden"
+  >
+    <div className="flex items-center justify-between mb-4">
+      <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">{label}</span>
+      {icon && (
+        <span className={cn('w-9 h-9 rounded-full flex items-center justify-center', accent)}>
+          {icon}
+        </span>
+      )}
+    </div>
+
+    <div className="flex items-baseline gap-2">
+      <span
+        className={cn(
+          'font-display text-4xl md:text-5xl font-black tracking-tighter leading-none',
+          loading && 'opacity-40 animate-pulse',
+        )}
+      >
+        {value}
+      </span>
+      {typeof delta === 'number' && delta !== 0 && (
+        <span
+          className={cn(
+            'text-[10px] font-black tracking-wider',
+            delta > 0 ? 'text-emerald-400' : 'text-rose-400',
+          )}
+        >
+          {delta > 0 ? '+' : ''}
+          {delta}
+        </span>
+      )}
+    </div>
+
+    {subValue && (
+      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">{subValue}</p>
+    )}
+
+    {typeof progress === 'number' && (
+      <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.min(100, progress)}%` }}
+          transition={{ duration: 0.8, delay: delay + 0.2, ease }}
+          className="h-full bg-brand-cream rounded-full"
+        />
+      </div>
+    )}
+  </motion.div>
+);
+
+type PanelProps = {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  delay?: number;
+};
+
+const Panel = ({ title, subtitle, children, delay = 0 }: PanelProps) => (
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, delay, ease }}
+    className="bg-white/[0.04] border border-white/10 rounded-2xl p-5"
+  >
+    <div className="mb-2">
+      <h3 className="font-display font-black uppercase tracking-tighter text-base">{title}</h3>
+      {subtitle && (
+        <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">{subtitle}</p>
+      )}
+    </div>
+    {children}
+  </motion.div>
+);

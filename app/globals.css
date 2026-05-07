@@ -1,0 +1,108 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: var(--font-poppins);
+  --font-sans: var(--font-poppins);
+
+  /* Paleta SDW.hub 2026 (Gradients.app) */
+  --color-brand-cream: #f0c68c;
+  --color-brand-cyan: #0f96ab;
+  --color-brand-blue: #236d98;
+  --color-brand-blue-light: #4a85b6;
+  --color-brand-purple: #492b92;
+  --color-brand-purple-dark: #3c165d;
+  --color-brand-rose: #843558;
+  --color-brand-rose-dark: #6c2164;
+  --color-brand-red: #692929;
+  --color-brand-dark-blue: #1b193c;
+
+  /* Tokens semânticos exigidos pelo lp-front-model */
+  --color-primary: var(--color-brand-purple);
+  --color-secondary: var(--color-brand-purple-dark);
+  --color-accent: var(--color-brand-cream);
+  --color-brand: var(--color-brand-dark-blue);
+
+  --spacing-section: clamp(5rem, 10vw, 7.5rem);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans text-brand bg-[#fdfcfb];
+    font-style: normal;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display leading-[1.1] tracking-tight transition-all;
+  }
+}
+
+@layer utilities {
+  .text-outline {
+    -webkit-text-stroke: 1.5px #ffffff;
+    color: transparent;
+  }
+  .text-outline-cream {
+    -webkit-text-stroke: 1.5px var(--color-brand-cream);
+    color: transparent;
+  }
+}
+
+@keyframes pulse-whatsapp {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 15px rgba(37, 211, 102, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+  }
+}
+
+.animate-whatsapp {
+  animation: pulse-whatsapp 3s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 24px rgba(73, 43, 146, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 48px rgba(73, 43, 146, 0.6);
+  }
+}
+
+.animate-glow {
+  animation: glow 3s ease-in-out infinite;
+}
