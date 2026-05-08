@@ -137,7 +137,7 @@ export const Hero = () => {
           tag: 'new-lead',
           renotify: true,
           vibrate: [200, 100, 200],
-        });
+        } as NotificationOptions & { renotify: boolean; vibrate: number[] });
       } else {
         new Notification(title, { body, icon });
       }
@@ -373,7 +373,7 @@ export const Hero = () => {
             <div
               role="tablist"
               aria-label="Filtro de período"
-              className="inline-flex flex-wrap gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
+              className="w-full md:w-auto flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
             >
               {PERIOD_ORDER.map((p) => {
                 const active = period === p;
@@ -384,7 +384,7 @@ export const Hero = () => {
                     aria-selected={active}
                     onClick={() => setPeriod(p)}
                     className={cn(
-                      'relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
+                      'relative shrink-0 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
                       active
                         ? 'text-brand-dark-blue'
                         : 'text-white/60 hover:text-white',
