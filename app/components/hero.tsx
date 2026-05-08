@@ -1,18 +1,25 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   UsersThreeIcon,
   TargetIcon,
-  CurrencyDollarIcon,
   TrendUpIcon,
   TrendDownIcon,
   MinusIcon,
   ArrowsClockwiseIcon,
   WarningCircleIcon,
   ClockIcon,
+  BellIcon,
+  BellSlashIcon,
 } from '@phosphor-icons/react/ssr';
 import { fetchLeads, type Lead, type ParsedLeads } from '@/lib/sheets';
 import { FetcherError } from '@/lib/fetcher';
@@ -30,10 +37,18 @@ import { cn } from '@/lib/utils';
 
 const REFRESH_MS = 30_000;
 
-const formatCurrencyBR = (value: number) =>
-  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
-
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
+
+function formatPeriodRange(period: PeriodKey, ref: Date): string {
+  const range = rangeFor(period, ref);
+  if (!range) return 'todos os leads';
+  const short = (d: Date) =>
+    d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const full = (d: Date) =>
+    d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  if (period === 'today' || period === 'yesterday') return full(range.start);
+  return `${short(range.start)} – ${short(range.end)}`;
+}
 
 type DistEntry = { label: string; count: number };
 
@@ -50,7 +65,10 @@ function topBy(leads: Lead[], key: keyof Lead, max = 5): DistEntry[] {
     .map(([label, count]) => ({ label, count }));
 }
 
-function leadsByDay(leads: Lead[], days: number): { day: Date; count: number; label: string }[] {
+function leadsByDay(
+  leads: Lead[],
+  days: number,
+): { day: Date; count: number; label: string }[] {
   const result: { day: Date; count: number; label: string }[] = [];
   const today = startOfDay();
   for (let i = days - 1; i >= 0; i--) {
@@ -58,12 +76,16 @@ function leadsByDay(leads: Lead[], days: number): { day: Date; count: number; la
     const next = addDays(day, 1);
     const count = leads.filter(
       (l) =>
-        l.timestamp && l.timestamp.getTime() >= day.getTime() && l.timestamp.getTime() < next.getTime(),
+        l.timestamp &&
+        l.timestamp.getTime() >= day.getTime() &&
+        l.timestamp.getTime() < next.getTime(),
     ).length;
     result.push({
       day,
       count,
-      label: day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', ''),
+      label: day
+        .toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+        .replace('.', ''),
     });
   }
   return result;
@@ -81,10 +103,58 @@ export const Hero = () => {
   const [flashKey, setFlashKey] = useState(0);
   const [newLeadIds, setNewLeadIds] = useState<Set<number>>(new Set());
   const [toastCount, setToastCount] = useState(0);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+  const [notifPermission, setNotifPermission] =
+    useState<NotificationPermission>('default');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const swRegRef = useRef<ServiceWorkerRegistration | null>(null);
+  const notifEnabledRef = useRef(false);
+  const settingsBtnRef = useRef<HTMLDivElement>(null);
 
   const csvUrl = process.env.NEXT_PUBLIC_LEADS_CSV_URL;
-  const dailyBudget = Number(process.env.NEXT_PUBLIC_DAILY_BUDGET ?? 0);
   const dailyGoal = Number(process.env.NEXT_PUBLIC_LEADS_DAILY_GOAL ?? 10);
+
+  const sendLeadNotification = useCallback(async (count: number) => {
+    if (!notifEnabledRef.current) return;
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const title = count === 1 ? 'Novo lead! 🎉' : `${count} novos leads! 🎉`;
+    const body =
+      count === 1
+        ? 'Um novo lead chegou no SDW.hub 2026.'
+        : `${count} novos leads chegaram no SDW.hub 2026.`;
+    const icon = '/images/sdw-logo-purple.png';
+    try {
+      if (swRegRef.current) {
+        await swRegRef.current.showNotification(title, {
+          body,
+          icon,
+          badge: icon,
+          tag: 'new-lead',
+          renotify: true,
+          vibrate: [200, 100, 200],
+        });
+      } else {
+        new Notification(title, { body, icon });
+      }
+    } catch {
+      /* notificação não disponível */
+    }
+  }, []);
+
+  const handleToggleNotif = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (!notifEnabled) {
+      if (Notification.permission !== 'granted') {
+        const result = await Notification.requestPermission();
+        setNotifPermission(result);
+        if (result !== 'granted') return;
+      }
+      setNotifEnabled(true);
+    } else {
+      setNotifEnabled(false);
+    }
+  }, [notifEnabled]);
 
   const load = useCallback(async () => {
     try {
@@ -124,18 +194,58 @@ export const Hero = () => {
       prevLeadIdsRef.current = allIds;
       return;
     }
-    const newIds = new Set([...allIds].filter((id) => !prevLeadIdsRef.current.has(id)));
+    const newIds = new Set(
+      [...allIds].filter((id) => !prevLeadIdsRef.current.has(id)),
+    );
     prevLeadIdsRef.current = allIds;
     if (newIds.size === 0) return;
     setFlashKey((k) => k + 1);
     setNewLeadIds(newIds);
     setToastCount(newIds.size);
+    sendLeadNotification(newIds.size);
     const t = setTimeout(() => {
       setNewLeadIds(new Set());
       setToastCount(0);
     }, 4000);
     return () => clearTimeout(t);
-  }, [data]);
+  }, [data, sendLeadNotification]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('sdwhub-notif-enabled') === 'true';
+    setNotifEnabled(saved);
+    notifEnabledRef.current = saved;
+    if ('Notification' in window) setNotifPermission(Notification.permission);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((reg) => {
+          swRegRef.current = reg;
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    notifEnabledRef.current = notifEnabled;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sdwhub-notif-enabled', String(notifEnabled));
+    }
+  }, [notifEnabled]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        settingsBtnRef.current &&
+        !settingsBtnRef.current.contains(e.target as Node)
+      ) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [settingsOpen]);
 
   const hasTimestamp = data?.hasTimestamp ?? false;
   const withTimestamp = data?.withTimestamp ?? 0;
@@ -167,12 +277,17 @@ export const Hero = () => {
   const yesterdayCount = yesterdayLeads.length;
   const periodCount = canFilterByDate ? periodLeads.length : total;
   const trend: 'up' | 'down' | 'flat' =
-    todayCount > yesterdayCount ? 'up' : todayCount < yesterdayCount ? 'down' : 'flat';
-  const TrendIcon = trend === 'up' ? TrendUpIcon : trend === 'down' ? TrendDownIcon : MinusIcon;
+    todayCount > yesterdayCount
+      ? 'up'
+      : todayCount < yesterdayCount
+        ? 'down'
+        : 'flat';
+  const TrendIcon =
+    trend === 'up' ? TrendUpIcon : trend === 'down' ? TrendDownIcon : MinusIcon;
   const trendDelta = todayCount - yesterdayCount;
 
-  const goalProgress = dailyGoal > 0 ? Math.min(100, (todayCount / dailyGoal) * 100) : 0;
-  const cpl = periodCount > 0 && dailyBudget > 0 ? dailyBudget / periodCount : 0;
+  const goalProgress =
+    dailyGoal > 0 ? Math.min(100, (todayCount / dailyGoal) * 100) : 0;
 
   const last7 = useMemo(() => leadsByDay(data?.leads ?? [], 7), [data]);
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
@@ -180,7 +295,9 @@ export const Hero = () => {
   const recent = useMemo(() => {
     const list = (data?.leads ?? []).slice();
     if (canFilterByDate) {
-      list.sort((a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0));
+      list.sort(
+        (a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0),
+      );
     } else {
       list.reverse();
     }
@@ -188,11 +305,21 @@ export const Hero = () => {
   }, [data, canFilterByDate]);
 
   const byFaturamento = useMemo(
-    () => topBy(periodLeads.length ? periodLeads : data?.leads ?? [], 'faturamento', 5),
+    () =>
+      topBy(
+        periodLeads.length ? periodLeads : (data?.leads ?? []),
+        'faturamento',
+        5,
+      ),
     [periodLeads, data],
   );
   const byMercado = useMemo(
-    () => topBy(periodLeads.length ? periodLeads : data?.leads ?? [], 'mercado', 5),
+    () =>
+      topBy(
+        periodLeads.length ? periodLeads : (data?.leads ?? []),
+        'mercado',
+        5,
+      ),
     [periodLeads, data],
   );
   const maxFat = Math.max(1, ...byFaturamento.map((e) => e.count));
@@ -211,318 +338,469 @@ export const Hero = () => {
           >
             <UsersThreeIcon size={18} weight="bold" />
             <span className="text-sm font-black">
-              +{toastCount} novo{toastCount > 1 ? 's' : ''} lead{toastCount > 1 ? 's' : ''}!
+              +{toastCount} novo{toastCount > 1 ? 's' : ''} lead
+              {toastCount > 1 ? 's' : ''}!
             </span>
           </motion.div>
         )}
       </AnimatePresence>
       <section className="min-h-screen bg-brand-dark-blue text-white px-6 md:px-10 py-8 md:py-10">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div className="flex items-center gap-4">
-          <Image
-            src="/images/sdw-logo-gold.png"
-            alt="SDW.hub"
-            width={56}
-            height={56}
-            priority
-            className="h-12 w-auto"
-          />
-          <div>
-            <span className="text-brand-cream font-black uppercase tracking-[0.3em] text-[10px] block">
-              SDW.hub 2026 · Dashboard Real Time
-            </span>
-            <h1 className="font-display text-2xl md:text-3xl font-black uppercase tracking-tighter">
-              Leads do Typebot
-            </h1>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div
-            role="tablist"
-            aria-label="Filtro de período"
-            className="inline-flex flex-wrap gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
-          >
-            {PERIOD_ORDER.map((p) => {
-              const active = period === p;
-              return (
-                <button
-                  key={p}
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setPeriod(p)}
-                  className={cn(
-                    'relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
-                    active ? 'text-brand-dark-blue' : 'text-white/60 hover:text-white',
-                  )}
-                >
-                  {active && (
-                    <motion.span
-                      layoutId="period-pill"
-                      className="absolute inset-0 bg-brand-cream rounded-full"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-10">{PERIOD_LABELS[p]}</span>
-                </button>
-              );
-            })}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div className="flex items-center gap-4">
+            <Image
+              src="/images/sdw-logo-gold.png"
+              alt="SDW.hub"
+              width={56}
+              height={56}
+              priority
+              className="h-12 w-auto"
+            />
+            <div>
+              <span className="text-brand-cream font-black uppercase tracking-[0.3em] text-[10px] block">
+                SDW.hub 2026 | Dashboard Em Tempo Real
+              </span>
+              <h1 className="font-display text-2xl md:text-3xl font-black uppercase tracking-tighter">
+                Leads Meta Ads
+              </h1>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              load();
-            }}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full bg-brand-purple hover:bg-brand-purple-dark transition-colors disabled:opacity-60"
-          >
-            <motion.span
-              animate={loading ? { rotate: 360 } : { rotate: 0 }}
-              transition={loading ? { repeat: Infinity, duration: 1, ease: 'linear' } : undefined}
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              role="tablist"
+              aria-label="Filtro de período"
+              className="inline-flex flex-wrap gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
             >
-              <ArrowsClockwiseIcon size={12} weight="bold" />
-            </motion.span>
-            Atualizar
-          </button>
-        </div>
-      </header>
-
-      <AnimatePresence>
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-6 flex items-start gap-3 px-5 py-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-200"
-          >
-            <WarningCircleIcon size={18} weight="duotone" />
-            <span className="text-xs font-semibold">{error}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {!hasTimestamp && data && (
-        <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
-          <WarningCircleIcon size={18} weight="duotone" />
-          <span className="text-xs font-semibold">
-            Adicione a coluna <code className="font-mono">Timestamp</code> na planilha para liberar
-            filtros por período. Métricas exibem o total geral até lá.
-          </span>
-        </div>
-      )}
-
-      {timestampEmpty && (
-        <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
-          <WarningCircleIcon size={18} weight="duotone" />
-          <div className="text-xs font-semibold leading-relaxed">
-            Coluna <code className="font-mono">Timestamp</code> detectada, mas todas as {total}{' '}
-            linhas estão vazias.{' '}
-            <span className="text-white/80">
-              Faça o backfill (Apps Script: Extensões → Apps Script → função{' '}
-              <code className="font-mono">setup</code>) ou preencha manualmente as células.
-            </span>
-            <span className="block mt-1 text-amber-200/70">
-              Filtros por período só ativam após carimbar pelo menos 1 lead.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <KpiCard
-          label="Total de Leads Hoje"
-          value={todayCount}
-          icon={<UsersThreeIcon size={18} weight="bold" />}
-          accent="bg-brand-purple"
-          loading={loading && !data}
-          delay={0}
-          flash={flashKey > 0}
-          flashKey={flashKey}
-        />
-        <KpiCard
-          label="Hoje vs. Ontem"
-          value={`${todayCount}`}
-          subValue={
-            canFilterByDate
-              ? `Ontem: ${yesterdayCount}`
-              : timestampEmpty
-                ? 'Backfill pendente'
-                : 'Sem coluna de data'
-          }
-          icon={<TrendIcon size={18} weight="bold" />}
-          accent={trend === 'up' ? 'bg-emerald-500' : trend === 'down' ? 'bg-rose-500' : 'bg-white/20'}
-          delta={canFilterByDate ? trendDelta : undefined}
-          loading={loading && !data}
-          delay={0.05}
-        />
-        <KpiCard
-          label="Meta diária"
-          value={`${todayCount}/${dailyGoal}`}
-          subValue={`${goalProgress.toFixed(0)}% concluído`}
-          icon={<TargetIcon size={18} weight="bold" />}
-          accent="bg-brand-cream text-brand-dark-blue"
-          progress={goalProgress}
-          loading={loading && !data}
-          delay={0.1}
-        />
-        <KpiCard
-          label="CPL Atual"
-          value={cpl > 0 ? formatCurrencyBR(cpl) : '—'}
-          subValue={
-            dailyBudget > 0
-              ? `${formatCurrencyBR(dailyBudget)} · ${periodCount} leads`
-              : 'Configure o orçamento'
-          }
-          icon={<CurrencyDollarIcon size={18} weight="bold" />}
-          accent="bg-brand-blue"
-          loading={loading && !data}
-          delay={0.15}
-        />
-      </div>
-
-      {/* Bottom row: 3 panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Bar chart - Leads / day */}
-        <Panel title="Leads / dia" subtitle="Últimos 7 dias" delay={0.2}>
-          {!canFilterByDate ? (
-            <p className="text-white/40 text-xs font-medium leading-relaxed">
-              {timestampEmpty
-                ? 'Coluna Timestamp vazia — preencha as linhas para ativar o histórico diário.'
-                : 'Adicione a coluna Timestamp para visualizar o histórico diário.'}
-            </p>
-          ) : (
-            <div className="flex items-end justify-between gap-2 h-40 mt-4">
-              {last7.map((d) => {
-                const heightPct = (d.count / maxBar) * 100;
+              {PERIOD_ORDER.map((p) => {
+                const active = period === p;
                 return (
-                  <div key={d.day.toISOString()} className="flex-1 flex flex-col items-center gap-2">
-                    <div className="relative w-full flex-1 flex items-end">
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${heightPct}%` }}
-                        transition={{ duration: 0.8, ease, delay: 0.3 }}
-                        className="w-full bg-gradient-to-t from-brand-purple to-brand-cream rounded-t-md min-h-[2px]"
+                  <button
+                    key={p}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setPeriod(p)}
+                    className={cn(
+                      'relative px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
+                      active
+                        ? 'text-brand-dark-blue'
+                        : 'text-white/60 hover:text-white',
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="period-pill"
+                        className="absolute inset-0 bg-brand-cream rounded-full"
+                        transition={{
+                          type: 'spring',
+                          stiffness: 380,
+                          damping: 30,
+                        }}
                       />
-                      {d.count > 0 && (
-                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black text-brand-cream">
-                          {d.count}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-white/40">
-                      {d.label}
+                    )}
+                    <span className="relative z-10 flex flex-col items-center gap-px leading-tight">
+                      <span>{PERIOD_LABELS[p]}</span>
+                      <span className="text-[7px] font-bold normal-case tracking-wide opacity-60">
+                        {formatPeriodRange(p, now)}
+                      </span>
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
-          )}
-        </Panel>
 
-        {/* Recently created */}
-        <Panel
-          title="Leads recentes"
-          subtitle={canFilterByDate ? 'Ordenados por chegada' : 'Ordem da planilha'}
-          delay={0.25}
-        >
-          <ul className="space-y-3 mt-2">
-            {recent.length === 0 && (
-              <li className="text-white/40 text-xs font-medium">Nenhum lead ainda.</li>
-            )}
-            {recent.map((lead, i) => {
-              const isNew = newLeadIds.has(lead.rowIndex);
-              return (
-              <motion.li
-                key={`${lead.rowIndex}-${lead.nome}`}
-                initial={{ opacity: 0, x: isNew ? 0 : -10, backgroundColor: isNew ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0)' }}
-                animate={{ opacity: 1, x: 0, backgroundColor: 'rgba(0,0,0,0)' }}
-                transition={{
-                  opacity: { duration: 0.4, delay: isNew ? 0 : 0.3 + i * 0.05, ease },
-                  x: { duration: 0.4, delay: isNew ? 0 : 0.3 + i * 0.05, ease },
-                  backgroundColor: { duration: 3, ease: 'easeOut' },
+            <div ref={settingsBtnRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsOpen((o) => !o);
+                  if (
+                    typeof window !== 'undefined' &&
+                    'Notification' in window
+                  ) {
+                    setNotifPermission(Notification.permission);
+                  }
                 }}
-                className="flex items-center justify-between gap-3 pb-3 border-b border-white/5 last:border-0 rounded-lg -mx-1 px-1"
+                aria-label="Configurações de notificação"
+                className={cn(
+                  'inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full transition-colors border',
+                  notifEnabled && notifPermission === 'granted'
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25'
+                    : 'bg-white/5 border-white/10 text-white/60 hover:text-white',
+                )}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-sm text-white truncate">{lead.nome || '—'}</p>
-                  <p className="text-[11px] text-white/40 font-medium truncate">
-                    {lead.redeSocial || lead.email || '—'}
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand-cream whitespace-nowrap">
-                  <ClockIcon size={11} weight="bold" />
-                  {canFilterByDate ? formatTimeAgo(lead.timestamp, now) : `#${lead.rowIndex + 1}`}
-                </span>
-              </motion.li>
-              );
-            })}
-          </ul>
-        </Panel>
+                {notifEnabled && notifPermission === 'granted' ? (
+                  <BellIcon size={12} weight="bold" />
+                ) : (
+                  <BellSlashIcon size={12} weight="bold" />
+                )}
+                <span className="hidden sm:inline">Notificações</span>
+              </button>
 
-        {/* Distribution by faturamento */}
-        <Panel
-          title="Por faturamento"
-          subtitle={`${periodCount} leads · ${PERIOD_LABELS[period]}`}
-          delay={0.3}
-        >
-          <ul className="space-y-3 mt-2">
-            {byFaturamento.length === 0 && (
-              <li className="text-white/40 text-xs font-medium">Sem dados no período.</li>
-            )}
-            {byFaturamento.map((entry, i) => {
-              const pct = (entry.count / maxFat) * 100;
-              return (
-                <li key={entry.label} className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-white/80 font-semibold truncate">{entry.label}</span>
-                    <span className="text-brand-cream font-black">{entry.count}</span>
-                  </div>
-                  <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.8, delay: 0.35 + i * 0.05, ease }}
-                      className="h-full bg-gradient-to-r from-brand-purple via-brand-rose to-brand-cream rounded-full"
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-
-          {byMercado.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-white/5">
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 block mb-3">
-                Top mercados
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {byMercado.map((m) => (
-                  <span
-                    key={m.label}
-                    className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold"
+              <AnimatePresence>
+                {settingsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    className="absolute right-0 top-full mt-2 w-72 bg-[#0d0d1f] border border-white/10 rounded-2xl p-4 shadow-2xl z-50"
                   >
-                    {m.label}
-                    <span className="text-brand-cream font-black">{m.count}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </Panel>
-      </div>
+                    <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mb-4">
+                      Configurações
+                    </p>
 
-      <footer className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
-        <span>Total geral: {total} leads</span>
-        <span>Sincronização automática a cada {REFRESH_MS / 1000}s</span>
-        <span>
-          Última atualização:{' '}
-          <span className="text-brand-cream">{formatTimeAgo(data?.fetchedAt ?? null, now)}</span>
-        </span>
-      </footer>
-    </section>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-white">
+                          Notificações de leads
+                        </p>
+                        <p className="text-[10px] text-white/40 font-medium leading-relaxed mt-0.5">
+                          {typeof window !== 'undefined' &&
+                          !('Notification' in window)
+                            ? 'Não suportado neste browser.'
+                            : notifPermission === 'denied'
+                              ? 'Bloqueado. Habilite nas configurações do site.'
+                              : notifPermission === 'granted'
+                                ? notifEnabled
+                                  ? 'Alertas de novos leads ativados.'
+                                  : 'Alertas desativados.'
+                                : 'Clique para ativar e permitir alertas.'}
+                        </p>
+                      </div>
+
+                      <button
+                        role="switch"
+                        aria-checked={
+                          notifEnabled && notifPermission === 'granted'
+                        }
+                        onClick={handleToggleNotif}
+                        disabled={notifPermission === 'denied'}
+                        className={cn(
+                          'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200',
+                          notifEnabled && notifPermission === 'granted'
+                            ? 'bg-emerald-500'
+                            : notifPermission === 'denied'
+                              ? 'bg-white/10 cursor-not-allowed opacity-50'
+                              : 'bg-white/20 hover:bg-white/30',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200',
+                            notifEnabled && notifPermission === 'granted'
+                              ? 'translate-x-5'
+                              : 'translate-x-0',
+                          )}
+                        />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                load();
+              }}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full bg-brand-purple hover:bg-brand-purple-dark transition-colors disabled:opacity-60"
+            >
+              <motion.span
+                animate={loading ? { rotate: 360 } : { rotate: 0 }}
+                transition={
+                  loading
+                    ? { repeat: Infinity, duration: 1, ease: 'linear' }
+                    : undefined
+                }
+              >
+                <ArrowsClockwiseIcon size={12} weight="bold" />
+              </motion.span>
+              Atualizar
+            </button>
+          </div>
+        </header>
+
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-6 flex items-start gap-3 px-5 py-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-200"
+            >
+              <WarningCircleIcon size={18} weight="duotone" />
+              <span className="text-xs font-semibold">{error}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!hasTimestamp && data && (
+          <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
+            <WarningCircleIcon size={18} weight="duotone" />
+            <span className="text-xs font-semibold">
+              Adicione a coluna <code className="font-mono">Timestamp</code> na
+              planilha para liberar filtros por período. Métricas exibem o total
+              geral até lá.
+            </span>
+          </div>
+        )}
+
+        {timestampEmpty && (
+          <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
+            <WarningCircleIcon size={18} weight="duotone" />
+            <div className="text-xs font-semibold leading-relaxed">
+              Coluna <code className="font-mono">Timestamp</code> detectada, mas
+              todas as {total} linhas estão vazias.{' '}
+              <span className="text-white/80">
+                Faça o backfill (Apps Script: Extensões → Apps Script → função{' '}
+                <code className="font-mono">setup</code>) ou preencha
+                manualmente as células.
+              </span>
+              <span className="block mt-1 text-amber-200/70">
+                Filtros por período só ativam após carimbar pelo menos 1 lead.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* KPI Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <KpiCard
+            label="Total de Leads Hoje"
+            value={todayCount}
+            subValue={now.toLocaleDateString('pt-BR', {
+              weekday: 'short',
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            })}
+            icon={<UsersThreeIcon size={18} weight="bold" />}
+            accent="bg-brand-purple"
+            loading={loading && !data}
+            delay={0}
+            flash={flashKey > 0}
+            flashKey={flashKey}
+          />
+          <KpiCard
+            label="Hoje vs. Ontem"
+            value={`${todayCount}`}
+            subValue={
+              canFilterByDate
+                ? `Ontem (${formatPeriodRange('yesterday', now)}): ${yesterdayCount}`
+                : timestampEmpty
+                  ? 'Backfill pendente'
+                  : 'Sem coluna de data'
+            }
+            icon={<TrendIcon size={18} weight="bold" />}
+            accent={
+              trend === 'up'
+                ? 'bg-emerald-500'
+                : trend === 'down'
+                  ? 'bg-rose-500'
+                  : 'bg-white/20'
+            }
+            delta={canFilterByDate ? trendDelta : undefined}
+            loading={loading && !data}
+            delay={0.05}
+          />
+          <KpiCard
+            label="Meta diária"
+            value={`${todayCount}/${dailyGoal}`}
+            subValue={`${goalProgress.toFixed(0)}% concluído`}
+            icon={<TargetIcon size={18} weight="bold" />}
+            accent="bg-brand-cream text-brand-dark-blue"
+            progress={goalProgress}
+            loading={loading && !data}
+            delay={0.1}
+          />
+        </div>
+
+        {/* Bottom row: 3 panels */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Bar chart - Leads / day */}
+          <Panel title="Leads / dia" subtitle={formatPeriodRange('7d', now)} delay={0.2}>
+            {!canFilterByDate ? (
+              <p className="text-white/40 text-xs font-medium leading-relaxed">
+                {timestampEmpty
+                  ? 'Coluna Timestamp vazia — preencha as linhas para ativar o histórico diário.'
+                  : 'Adicione a coluna Timestamp para visualizar o histórico diário.'}
+              </p>
+            ) : (
+              <div className="flex items-end justify-between gap-2 h-40 mt-4">
+                {last7.map((d) => {
+                  const heightPct = (d.count / maxBar) * 100;
+                  return (
+                    <div
+                      key={d.day.toISOString()}
+                      className="flex-1 flex flex-col items-center gap-2"
+                    >
+                      <div className="relative w-full flex-1 flex items-end">
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: `${heightPct}%` }}
+                          transition={{ duration: 0.8, ease, delay: 0.3 }}
+                          className="w-full bg-gradient-to-t from-brand-purple to-brand-cream rounded-t-md min-h-[2px]"
+                        />
+                        {d.count > 0 && (
+                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black text-brand-cream">
+                            {d.count}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-white/40">
+                        {d.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
+
+          {/* Recently created */}
+          <Panel
+            title="Leads recentes"
+            subtitle={
+              canFilterByDate ? 'Ordenados por chegada' : 'Ordem da planilha'
+            }
+            delay={0.25}
+          >
+            <ul className="space-y-3 mt-2">
+              {recent.length === 0 && (
+                <li className="text-white/40 text-xs font-medium">
+                  Nenhum lead ainda.
+                </li>
+              )}
+              {recent.map((lead, i) => {
+                const isNew = newLeadIds.has(lead.rowIndex);
+                return (
+                  <motion.li
+                    key={`${lead.rowIndex}-${lead.nome}`}
+                    initial={{
+                      opacity: 0,
+                      x: isNew ? 0 : -10,
+                      backgroundColor: isNew
+                        ? 'rgba(16,185,129,0.15)'
+                        : 'rgba(0,0,0,0)',
+                    }}
+                    animate={{
+                      opacity: 1,
+                      x: 0,
+                      backgroundColor: 'rgba(0,0,0,0)',
+                    }}
+                    transition={{
+                      opacity: {
+                        duration: 0.4,
+                        delay: isNew ? 0 : 0.3 + i * 0.05,
+                        ease,
+                      },
+                      x: {
+                        duration: 0.4,
+                        delay: isNew ? 0 : 0.3 + i * 0.05,
+                        ease,
+                      },
+                      backgroundColor: { duration: 3, ease: 'easeOut' },
+                    }}
+                    className="flex items-center justify-between gap-3 pb-3 border-b border-white/5 last:border-0 rounded-lg -mx-1 px-1"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-white truncate">
+                        {lead.nome || '—'}
+                      </p>
+                      <p className="text-[11px] text-white/40 font-medium truncate">
+                        {lead.redeSocial || lead.email || '—'}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand-cream whitespace-nowrap">
+                      <ClockIcon size={11} weight="bold" />
+                      {canFilterByDate
+                        ? formatTimeAgo(lead.timestamp, now)
+                        : `#${lead.rowIndex + 1}`}
+                    </span>
+                  </motion.li>
+                );
+              })}
+            </ul>
+          </Panel>
+
+          {/* Distribution by faturamento */}
+          <Panel
+            title="Por faturamento"
+            subtitle={`${periodCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
+            delay={0.3}
+          >
+            <ul className="space-y-3 mt-2">
+              {byFaturamento.length === 0 && (
+                <li className="text-white/40 text-xs font-medium">
+                  Sem dados no período.
+                </li>
+              )}
+              {byFaturamento.map((entry, i) => {
+                const pct = (entry.count / maxFat) * 100;
+                return (
+                  <li key={entry.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-white/80 font-semibold truncate">
+                        {entry.label}
+                      </span>
+                      <span className="text-brand-cream font-black">
+                        {entry.count}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{
+                          duration: 0.8,
+                          delay: 0.35 + i * 0.05,
+                          ease,
+                        }}
+                        className="h-full bg-gradient-to-r from-brand-purple via-brand-rose to-brand-cream rounded-full"
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {byMercado.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-white/5">
+                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 block mb-3">
+                  Top mercados
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {byMercado.map((m) => (
+                    <span
+                      key={m.label}
+                      className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold"
+                    >
+                      {m.label}
+                      <span className="text-brand-cream font-black">
+                        {m.count}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        <footer className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+          <span>Total geral: {total} leads</span>
+          <span>Sincronização automática a cada {REFRESH_MS / 1000}s</span>
+          <span>
+            Última atualização:{' '}
+            <span className="text-brand-cream">
+              {formatTimeAgo(data?.fetchedAt ?? null, now)}
+            </span>
+          </span>
+        </footer>
+      </section>
     </>
   );
 };
@@ -559,9 +837,16 @@ const KpiCard = ({
     className="relative bg-white/[0.04] border border-white/10 rounded-2xl p-5 overflow-hidden"
   >
     <div className="flex items-center justify-between mb-4">
-      <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">{label}</span>
+      <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">
+        {label}
+      </span>
       {icon && (
-        <span className={cn('w-9 h-9 rounded-full flex items-center justify-center', accent)}>
+        <span
+          className={cn(
+            'w-9 h-9 rounded-full flex items-center justify-center',
+            accent,
+          )}
+        >
           {icon}
         </span>
       )}
@@ -590,7 +875,9 @@ const KpiCard = ({
     </div>
 
     {subValue && (
-      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">{subValue}</p>
+      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">
+        {subValue}
+      </p>
     )}
 
     {typeof progress === 'number' && (
@@ -621,9 +908,13 @@ const Panel = ({ title, subtitle, children, delay = 0 }: PanelProps) => (
     className="bg-white/[0.04] border border-white/10 rounded-2xl p-5"
   >
     <div className="mb-2">
-      <h3 className="font-display font-black uppercase tracking-tighter text-base">{title}</h3>
+      <h3 className="font-display font-black uppercase tracking-tighter text-base">
+        {title}
+      </h3>
       {subtitle && (
-        <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">{subtitle}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+          {subtitle}
+        </p>
       )}
     </div>
     {children}
