@@ -553,19 +553,45 @@ export const Hero = () => {
         )}
 
         {timestampEmpty && (
-          <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
-            <WarningCircleIcon size={18} weight="duotone" />
-            <div className="text-xs font-semibold leading-relaxed">
-              Coluna <code className="font-mono">Timestamp</code> detectada, mas
-              todas as {total} linhas estão vazias.{' '}
-              <span className="text-white/80">
-                Faça o backfill (Apps Script: Extensões → Apps Script → função{' '}
-                <code className="font-mono">setup</code>) ou preencha
-                manualmente as células.
-              </span>
-              <span className="block mt-1 text-amber-200/70">
-                Filtros por período só ativam após carimbar pelo menos 1 lead.
-              </span>
+          <div className="mb-6 flex items-start gap-3 px-5 py-4 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
+            <WarningCircleIcon size={20} weight="duotone" className="shrink-0 mt-0.5" />
+            <div className="text-xs font-semibold leading-relaxed space-y-2">
+              <p>
+                Coluna <code className="font-mono bg-white/10 px-1 rounded">Timestamp</code> detectada,
+                mas todas as {total} linhas estão sem data — filtros por dia estão desativados.
+              </p>
+              <p className="text-white/80">
+                Corrija em <strong>uma</strong> das formas abaixo:
+              </p>
+              <ol className="list-decimal list-inside space-y-1 text-white/70 font-normal">
+                <li>
+                  <strong className="text-white/90">Typebot (ideal):</strong> no bloco Google Sheets,
+                  adicione o campo <code className="font-mono bg-white/10 px-1 rounded">Timestamp</code> com
+                  o valor <code className="font-mono bg-white/10 px-1 rounded">{"{{now}}"}</code>.
+                </li>
+                <li>
+                  <strong className="text-white/90">Apps Script (automático):</strong> na planilha, vá em
+                  Extensões → Apps Script, cole o código abaixo e execute{' '}
+                  <code className="font-mono bg-white/10 px-1 rounded">setup()</code> uma vez:
+                </li>
+              </ol>
+              <pre className="mt-1 p-2 bg-black/30 rounded text-[10px] font-mono text-white/60 overflow-x-auto whitespace-pre leading-relaxed">{`function setup() {
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('fillMissing').forSpreadsheet(SpreadsheetApp.getActive()).onChange().create();
+  ScriptApp.newTrigger('fillMissing').timeBased().everyMinutes(1).create();
+  fillMissing();
+}
+function fillMissing() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const last = sh.getLastRow();
+  if (last < 2) return;
+  const rng = sh.getRange(2, 1, last - 1, 1);
+  const vals = rng.getValues();
+  const now = new Date();
+  let changed = false;
+  vals.forEach(r => { if (!r[0]) { r[0] = now; changed = true; } });
+  if (changed) rng.setValues(vals);
+}`}</pre>
             </div>
           </div>
         )}

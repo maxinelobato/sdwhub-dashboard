@@ -1,0 +1,13 @@
+{
+  "name": "SDW.hub 2026 | Dashboard Real Time",
+  "short_name": "SDW.hub",
+  "description": "Painel em tempo real dos leads do SDW.hub 2026.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0a1a",
+  "theme_color": "#492b92",
+  "icons": [
+    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

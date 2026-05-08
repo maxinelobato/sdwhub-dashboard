@@ -16,11 +16,11 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sdwhub.com.br';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'SDW.hub 2026 | Dashboard Real Time',
+    default: 'SDW.hub 2026 | Dashboard Em tempo real.',
     template: '%s | SDW.hub 2026',
   },
   description:
-    'Painel em tempo real dos leads do Typebot do SDW.hub 2026: total do dia, comparativo, meta e CPL.',
+    'Painel em tempo real dos leads do SDW.hub 2026: total do dia e comparativo.',
   robots: { index: false, follow: false },
   keywords: [
     'SDW.hub',
@@ -33,23 +33,35 @@ export const metadata: Metadata = {
     'SDW Club',
     'empreendedorismo',
     'dashboard real time',
+    'dashboard em tempo real',
+    'dash tempo real',
   ],
   authors: [{ name: 'SDW Labs' }],
   creator: 'SDW Labs',
   publisher: 'SDW.hub',
   icons: {
     icon: [
-      { url: '/favicon.ico' },
-      { url: '/images/sdw-logo-purple.png', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      {
+        url: '/android-chrome-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+      },
     ],
-    apple: '/images/sdw-logo-purple.png',
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    other: [{ rel: 'manifest', url: '/site.webmanifest' }],
   },
   openGraph: {
     type: 'website',
     locale: 'pt_BR',
     url: siteUrl,
     siteName: 'SDW.hub 2026',
-    title: 'SDW.hub 2026 | Dashboard Real Time — Santos Digital Week',
+    title: 'SDW.hub 2026 | Dashboard Em tempo real — Santos Digital Week',
     description:
       'O maior evento de negócios, inovação e tecnologia da Baixada Santista.',
     images: [
@@ -63,7 +75,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SDW.hub 2026 | Dashboard Real Time',
+    title: 'SDW.hub 2026 | Dashboard Em tempo real',
     description:
       'O maior evento de negócios, inovação e tecnologia da Baixada Santista.',
     images: ['/images/sdw-logo-purple.png'],

@@ -98,9 +98,8 @@ function toDate(raw: string): Date | null {
     return Number.isNaN(d.getTime()) ? null : d;
   }
 
-  const direct = new Date(trimmed);
-  if (!Number.isNaN(direct.getTime())) return direct;
-
+  // BR format DD/MM/YYYY must be checked before new Date() — otherwise
+  // "8/5/2026" is misread as August 5 (MM/DD) instead of May 8 (DD/MM).
   const brMatch = trimmed.match(
     /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/,
   );
@@ -116,6 +115,9 @@ function toDate(raw: string): Date | null {
     );
     return Number.isNaN(d.getTime()) ? null : d;
   }
+
+  const direct = new Date(trimmed);
+  if (!Number.isNaN(direct.getTime())) return direct;
 
   return null;
 }
