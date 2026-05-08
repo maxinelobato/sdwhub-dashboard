@@ -45,7 +45,11 @@ function formatPeriodRange(period: PeriodKey, ref: Date): string {
   const short = (d: Date) =>
     d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   const full = (d: Date) =>
-    d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    d.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   if (period === 'today' || period === 'yesterday') return full(range.start);
   return `${short(range.start)} – ${short(range.end)}`;
 }
@@ -621,7 +625,11 @@ export const Hero = () => {
         {/* Bottom row: 3 panels */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Bar chart - Leads / day */}
-          <Panel title="Leads / dia" subtitle={formatPeriodRange('7d', now)} delay={0.2}>
+          <Panel
+            title="Leads / dia"
+            subtitle={formatPeriodRange('7d', now)}
+            delay={0.2}
+          >
             {!canFilterByDate ? (
               <p className="text-white/40 text-xs font-medium leading-relaxed">
                 {timestampEmpty
