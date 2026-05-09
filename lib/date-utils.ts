@@ -68,6 +68,14 @@ export function formatDateTimeBR(d: Date | null): string {
   });
 }
 
+export function formatTimeHMS(d: Date | null): string {
+  if (!d) return '—';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
 export function formatTimeAgo(d: Date | null, now: Date = new Date()): string {
   if (!d) return '—';
   const diff = now.getTime() - d.getTime();

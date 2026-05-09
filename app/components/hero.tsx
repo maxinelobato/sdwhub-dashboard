@@ -31,6 +31,7 @@ import {
   startOfDay,
   addDays,
   formatTimeAgo,
+  formatTimeHMS,
   type PeriodKey,
 } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
@@ -611,8 +612,7 @@ function fillMissing() {
             accent="bg-brand-purple"
             loading={loading && !data}
             delay={0}
-            flash={flashKey > 0}
-            flashKey={flashKey}
+            flash={toastCount > 0}
           />
           <KpiCard
             label="Hoje vs. Ontem"
@@ -751,7 +751,7 @@ function fillMissing() {
                     <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand-cream whitespace-nowrap">
                       <ClockIcon size={11} weight="bold" />
                       {canFilterByDate
-                        ? formatTimeAgo(lead.timestamp, now)
+                        ? formatTimeHMS(lead.timestamp)
                         : `#${lead.rowIndex + 1}`}
                     </span>
                   </motion.li>
@@ -850,7 +850,6 @@ type KpiCardProps = {
   loading?: boolean;
   delay?: number;
   flash?: boolean;
-  flashKey?: number;
 };
 
 const KpiCard = ({
@@ -863,67 +862,73 @@ const KpiCard = ({
   progress,
   loading,
   delay = 0,
+  flash = false,
 }: KpiCardProps) => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.6, delay, ease }}
-    className="relative bg-white/[0.04] border border-white/10 rounded-2xl p-5 overflow-hidden"
+    className={cn(
+      flash ? 'shimmer-border-green' : 'shimmer-border',
+      'relative rounded-2xl p-[1.5px]',
+    )}
   >
-    <div className="flex items-center justify-between mb-4">
-      <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">
-        {label}
-      </span>
-      {icon && (
-        <span
-          className={cn(
-            'w-9 h-9 rounded-full flex items-center justify-center',
-            accent,
-          )}
-        >
-          {icon}
+    <div className="relative bg-[#1d1b3f] rounded-[14px] p-5 overflow-hidden h-full">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">
+          {label}
         </span>
-      )}
-    </div>
-
-    <div className="flex items-baseline gap-2">
-      <span
-        className={cn(
-          'font-display text-4xl md:text-5xl font-black tracking-tighter leading-none',
-          loading && 'opacity-40 animate-pulse',
+        {icon && (
+          <span
+            className={cn(
+              'w-9 h-9 rounded-full flex items-center justify-center',
+              accent,
+            )}
+          >
+            {icon}
+          </span>
         )}
-      >
-        {value}
-      </span>
-      {typeof delta === 'number' && delta !== 0 && (
+      </div>
+
+      <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            'text-[10px] font-black tracking-wider',
-            delta > 0 ? 'text-emerald-400' : 'text-rose-400',
+            'font-display text-4xl md:text-5xl font-black tracking-tighter leading-none',
+            loading && 'opacity-40 animate-pulse',
           )}
         >
-          {delta > 0 ? '+' : ''}
-          {delta}
+          {value}
         </span>
+        {typeof delta === 'number' && delta !== 0 && (
+          <span
+            className={cn(
+              'text-[10px] font-black tracking-wider',
+              delta > 0 ? 'text-emerald-400' : 'text-rose-400',
+            )}
+          >
+            {delta > 0 ? '+' : ''}
+            {delta}
+          </span>
+        )}
+      </div>
+
+      {subValue && (
+        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">
+          {subValue}
+        </p>
+      )}
+
+      {typeof progress === 'number' && (
+        <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(100, progress)}%` }}
+            transition={{ duration: 0.8, delay: delay + 0.2, ease }}
+            className="h-full bg-brand-cream rounded-full"
+          />
+        </div>
       )}
     </div>
-
-    {subValue && (
-      <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">
-        {subValue}
-      </p>
-    )}
-
-    {typeof progress === 'number' && (
-      <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${Math.min(100, progress)}%` }}
-          transition={{ duration: 0.8, delay: delay + 0.2, ease }}
-          className="h-full bg-brand-cream rounded-full"
-        />
-      </div>
-    )}
   </motion.div>
 );
 
@@ -939,18 +944,20 @@ const Panel = ({ title, subtitle, children, delay = 0 }: PanelProps) => (
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.6, delay, ease }}
-    className="bg-white/[0.04] border border-white/10 rounded-2xl p-5"
+    className="shimmer-border relative rounded-2xl p-[1.5px]"
   >
-    <div className="mb-2">
-      <h3 className="font-display font-black uppercase tracking-tighter text-base">
-        {title}
-      </h3>
-      {subtitle && (
-        <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
-          {subtitle}
-        </p>
-      )}
+    <div className="bg-[#1d1b3f] rounded-[14px] p-5 h-full">
+      <div className="mb-2">
+        <h3 className="font-display font-black uppercase tracking-tighter text-base">
+          {title}
+        </h3>
+        {subtitle && (
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {children}
     </div>
-    {children}
   </motion.div>
 );

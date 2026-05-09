@@ -106,3 +106,40 @@
 .animate-glow {
   animation: glow 3s ease-in-out infinite;
 }
+
+@property --shimmer-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes shimmer-spin {
+  to {
+    --shimmer-angle: 360deg;
+  }
+}
+
+.shimmer-border {
+  background: conic-gradient(
+    from var(--shimmer-angle) at 50% 50%,
+    #f0c68c,
+    #492b92,
+    #843558,
+    #0f96ab,
+    #236d98,
+    #f0c68c
+  );
+  animation: shimmer-spin 6s linear infinite;
+}
+
+.shimmer-border-green {
+  background: conic-gradient(
+    from var(--shimmer-angle) at 50% 50%,
+    #6ee7b7,
+    #10b981,
+    #34d399,
+    #059669,
+    #6ee7b7
+  );
+  animation: shimmer-spin 1.5s linear infinite;
+}
