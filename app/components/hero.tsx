@@ -21,13 +21,16 @@ import {
   BellIcon,
   BellSlashIcon,
 } from '@phosphor-icons/react/ssr';
-import { fetchLeads, type Lead, type ParsedLeads } from '@/lib/sheets';
-import { FetcherError } from '@/lib/fetcher';
+import type { Lead, ParsedLeads } from '@/lib/sheets';
+import { supabase } from '@/lib/supabase';
 import {
   PERIOD_LABELS,
   PERIOD_ORDER,
+  PERIOD_KPI_LABELS,
+  PERIOD_GOAL_LABELS,
   isWithin,
   rangeFor,
+  prevRangeFor,
   startOfDay,
   addDays,
   formatTimeAgo,
@@ -36,7 +39,7 @@ import {
 } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = Number(process.env.NEXT_PUBLIC_REFRESH_SECONDS ?? 10) * 1000;
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
@@ -116,7 +119,6 @@ export const Hero = () => {
   const notifEnabledRef = useRef(false);
   const settingsBtnRef = useRef<HTMLDivElement>(null);
 
-  const csvUrl = process.env.NEXT_PUBLIC_LEADS_CSV_URL;
   const dailyGoal = Number(process.env.NEXT_PUBLIC_LEADS_DAILY_GOAL ?? 10);
 
   const sendLeadNotification = useCallback(async (count: number) => {
@@ -164,20 +166,24 @@ export const Hero = () => {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const result = await fetchLeads(csvUrl);
-      setData(result);
+      const res = await fetch('/api/leads', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Falha ao sincronizar (${res.status})`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      const parsed: ParsedLeads = {
+        ...json,
+        fetchedAt: new Date(json.fetchedAt),
+        leads: (json.leads as (Omit<Lead, 'timestamp'> & { timestamp: string | null })[]).map(
+          (l) => ({ ...l, timestamp: l.timestamp ? new Date(l.timestamp) : null }),
+        ),
+      };
+      setData(parsed);
     } catch (e) {
-      const msg =
-        e instanceof FetcherError
-          ? `Falha ao sincronizar (${e.status})`
-          : e instanceof Error
-            ? e.message
-            : 'Erro desconhecido';
-      setError(msg);
+      setError(e instanceof Error ? e.message : 'Erro desconhecido');
     } finally {
       setLoading(false);
     }
-  }, [csvUrl]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -189,6 +195,17 @@ export const Hero = () => {
       setNow(new Date());
     }, REFRESH_MS);
     return () => clearInterval(id);
+  }, [load]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('leads-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        load();
+        setNow(new Date());
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [load]);
 
   useEffect(() => {
@@ -262,72 +279,59 @@ export const Hero = () => {
   /** Cobertura completa: todos os leads têm timestamp — todayCount usa filtro real. */
   const hasFullCoverage = hasTimestamp && total > 0 && withTimestamp >= total;
 
-  const todayLeads = useMemo(() => {
-    if (!data) return [];
-    const range = rangeFor('today', now);
-    return data.leads.filter((l) => isWithin(l.timestamp, range));
-  }, [data, now]);
-
-  const yesterdayLeads = useMemo(() => {
-    if (!data) return [];
-    const range = rangeFor('yesterday', now);
-    return data.leads.filter((l) => isWithin(l.timestamp, range));
-  }, [data, now]);
-
-  const periodLeads = useMemo(() => {
+  const primaryLeads = useMemo(() => {
     if (!data) return [];
     const range = rangeFor(period, now);
     return data.leads.filter((l) => isWithin(l.timestamp, range));
   }, [data, now, period]);
 
-  const todayCount = hasFullCoverage ? todayLeads.length : total;
-  const yesterdayCount = yesterdayLeads.length;
-  const periodCount = hasFullCoverage ? periodLeads.length : total;
+  const compareLeads = useMemo(() => {
+    if (!data) return [];
+    const range = prevRangeFor(period, now);
+    if (!range) return [];
+    return data.leads.filter((l) => l.timestamp !== null && isWithin(l.timestamp, range));
+  }, [data, now, period]);
+
+  const primaryCount = hasFullCoverage ? primaryLeads.length : total;
+  const compareCount = compareLeads.length;
   const trend: 'up' | 'down' | 'flat' =
-    todayCount > yesterdayCount
+    primaryCount > compareCount
       ? 'up'
-      : todayCount < yesterdayCount
+      : primaryCount < compareCount
         ? 'down'
         : 'flat';
   const TrendIcon =
     trend === 'up' ? TrendUpIcon : trend === 'down' ? TrendDownIcon : MinusIcon;
-  const trendDelta = todayCount - yesterdayCount;
+  const trendDelta = primaryCount - compareCount;
 
-  const goalProgress =
-    dailyGoal > 0 ? Math.min(100, (todayCount / dailyGoal) * 100) : 0;
+  const periodDays = period === '7d' ? 7 : period === '14d' ? 14 : 1;
+  const periodGoal = dailyGoal * periodDays;
+  const goalProgress = periodGoal > 0 ? Math.min(100, (primaryCount / periodGoal) * 100) : 0;
 
   const last7 = useMemo(() => leadsByDay(data?.leads ?? [], 7), [data]);
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
 
   const recent = useMemo(() => {
-    const list = (data?.leads ?? []).slice();
-    if (canFilterByDate) {
-      list.sort(
-        (a, b) => (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0),
-      );
-    } else {
-      list.reverse();
-    }
-    return list.slice(0, 6);
-  }, [data, canFilterByDate]);
+    return (data?.leads ?? []).slice().sort((a, b) => b.rowIndex - a.rowIndex).slice(0, 6);
+  }, [data]);
 
   const byFaturamento = useMemo(
     () =>
       topBy(
-        periodLeads.length ? periodLeads : (data?.leads ?? []),
+        primaryLeads.length ? primaryLeads : (data?.leads ?? []),
         'faturamento',
         5,
       ),
-    [periodLeads, data],
+    [primaryLeads, data],
   );
   const byMercado = useMemo(
     () =>
       topBy(
-        periodLeads.length ? periodLeads : (data?.leads ?? []),
+        primaryLeads.length ? primaryLeads : (data?.leads ?? []),
         'mercado',
         5,
       ),
-    [periodLeads, data],
+    [primaryLeads, data],
   );
   const maxFat = Math.max(1, ...byFaturamento.map((e) => e.count));
 
@@ -602,14 +606,9 @@ function fillMissing() {
         {/* KPI Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <KpiCard
-            label="Total de Leads Hoje"
-            value={todayCount}
-            subValue={now.toLocaleDateString('pt-BR', {
-              weekday: 'short',
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-            })}
+            label={PERIOD_KPI_LABELS[period].main}
+            value={primaryCount}
+            subValue={formatPeriodRange(period, now)}
             icon={<UsersThreeIcon size={18} weight="bold" />}
             accent="bg-brand-purple"
             loading={loading && !data}
@@ -617,11 +616,11 @@ function fillMissing() {
             flash={toastCount > 0}
           />
           <KpiCard
-            label="Hoje vs. Ontem"
-            value={`${todayCount}`}
+            label={PERIOD_KPI_LABELS[period].compare}
+            value={`${primaryCount}`}
             subValue={
-              canFilterByDate
-                ? `Ontem (${formatPeriodRange('yesterday', now)}): ${yesterdayCount}`
+              canFilterByDate && period !== 'all'
+                ? `Período anterior: ${compareCount}`
                 : timestampEmpty
                   ? 'Backfill pendente'
                   : 'Sem coluna de data'
@@ -634,13 +633,13 @@ function fillMissing() {
                   ? 'bg-rose-500'
                   : 'bg-white/20'
             }
-            delta={canFilterByDate ? trendDelta : undefined}
+            delta={canFilterByDate && period !== 'all' ? trendDelta : undefined}
             loading={loading && !data}
             delay={0.05}
           />
           <KpiCard
-            label="Meta diária"
-            value={`${todayCount}/${dailyGoal}`}
+            label={PERIOD_GOAL_LABELS[period]}
+            value={`${primaryCount}/${periodGoal}`}
             subValue={`${goalProgress.toFixed(0)}% concluído`}
             icon={<TargetIcon size={18} weight="bold" />}
             accent="bg-brand-cream text-brand-dark-blue"
@@ -699,9 +698,7 @@ function fillMissing() {
           {/* Recently created */}
           <Panel
             title="Leads recentes"
-            subtitle={
-              canFilterByDate ? 'Ordenados por chegada' : 'Ordem da planilha'
-            }
+            subtitle="Ordenados por chegada"
             delay={0.25}
           >
             <ul className="space-y-3 mt-2">
@@ -765,7 +762,7 @@ function fillMissing() {
           {/* Distribution by faturamento */}
           <Panel
             title="Por faturamento"
-            subtitle={`${periodCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
+            subtitle={`${primaryCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
             delay={0.3}
           >
             <ul className="space-y-3 mt-2">

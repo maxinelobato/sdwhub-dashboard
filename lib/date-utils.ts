@@ -76,6 +76,43 @@ export function formatTimeHMS(d: Date | null): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+export const PERIOD_KPI_LABELS: Record<PeriodKey, { main: string; compare: string }> = {
+  today:     { main: 'Leads Hoje',       compare: 'Hoje vs. Ontem' },
+  yesterday: { main: 'Leads de Ontem',   compare: 'Ontem vs. Anteontem' },
+  '7d':      { main: 'Leads — 7 dias',   compare: '7 dias vs. 7 anteriores' },
+  '14d':     { main: 'Leads — 14 dias',  compare: '14 dias vs. 14 anteriores' },
+  all:       { main: 'Total de Leads',   compare: 'Total Geral' },
+};
+
+export const PERIOD_GOAL_LABELS: Record<PeriodKey, string> = {
+  today:     'Meta diária',
+  yesterday: 'Meta de ontem',
+  '7d':      'Meta semanal',
+  '14d':     'Meta quinzenal',
+  all:       'Meta total',
+};
+
+/** Returns the date range immediately before the given period. Returns null for 'all'. */
+export function prevRangeFor(period: PeriodKey, ref: Date = new Date()): DateRange | null {
+  const today = startOfDay(ref);
+  switch (period) {
+    case 'today': {
+      const d = addDays(today, -1);
+      return { start: d, end: endOfDay(d) };
+    }
+    case 'yesterday': {
+      const d = addDays(today, -2);
+      return { start: d, end: endOfDay(d) };
+    }
+    case '7d':
+      return { start: addDays(today, -13), end: endOfDay(addDays(today, -7)) };
+    case '14d':
+      return { start: addDays(today, -27), end: endOfDay(addDays(today, -14)) };
+    case 'all':
+      return null;
+  }
+}
+
 export function formatTimeAgo(d: Date | null, now: Date = new Date()): string {
   if (!d) return '—';
   const diff = now.getTime() - d.getTime();

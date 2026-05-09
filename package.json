@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/genai": "latest",
     "@phosphor-icons/react": "latest",
+    "@supabase/supabase-js": "^2.105.4",
     "clsx": "latest",
     "embla-carousel-autoplay": "latest",
     "embla-carousel-react": "latest",
