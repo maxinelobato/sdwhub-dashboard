@@ -208,8 +208,9 @@ export const DEFAULT_LEADS_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTfpU4XEsLcqY7jYF74-AKSzi9FGWfF-EuNmyp4D1y91Sob-no3SrNnoRQu8wcASwp9Cn9RKfAUhoBx/pub?gid=1054517737&single=true&output=csv';
 
 export async function fetchLeads(url: string = DEFAULT_LEADS_CSV_URL): Promise<ParsedLeads> {
-  const csv = await fetcher<string>(url, {
-    headers: { Accept: 'text/csv' },
+  const bustUrl = `${url}&t=${Date.now()}`;
+  const csv = await fetcher<string>(bustUrl, {
+    headers: { Accept: 'text/csv', 'Cache-Control': 'no-cache, no-store' },
     cache: 'no-store',
   });
   const rows = parseCSV(csv);

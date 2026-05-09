@@ -259,6 +259,8 @@ export const Hero = () => {
   const timestampEmpty = hasTimestamp && total > 0 && withTimestamp === 0;
   /** Pode usar filtros por período de fato (coluna existe + ao menos 1 linha preenchida). */
   const canFilterByDate = hasTimestamp && withTimestamp > 0;
+  /** Cobertura completa: todos os leads têm timestamp — todayCount usa filtro real. */
+  const hasFullCoverage = hasTimestamp && total > 0 && withTimestamp >= total;
 
   const todayLeads = useMemo(() => {
     if (!data) return [];
@@ -278,9 +280,9 @@ export const Hero = () => {
     return data.leads.filter((l) => isWithin(l.timestamp, range));
   }, [data, now, period]);
 
-  const todayCount = canFilterByDate ? todayLeads.length : total;
+  const todayCount = hasFullCoverage ? todayLeads.length : total;
   const yesterdayCount = yesterdayLeads.length;
-  const periodCount = canFilterByDate ? periodLeads.length : total;
+  const periodCount = hasFullCoverage ? periodLeads.length : total;
   const trend: 'up' | 'down' | 'flat' =
     todayCount > yesterdayCount
       ? 'up'
