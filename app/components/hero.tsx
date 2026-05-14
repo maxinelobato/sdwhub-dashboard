@@ -173,9 +173,14 @@ export const Hero = () => {
       const parsed: ParsedLeads = {
         ...json,
         fetchedAt: new Date(json.fetchedAt),
-        leads: (json.leads as (Omit<Lead, 'timestamp'> & { timestamp: string | null })[]).map(
-          (l) => ({ ...l, timestamp: l.timestamp ? new Date(l.timestamp) : null }),
-        ),
+        leads: (
+          json.leads as (Omit<Lead, 'timestamp'> & {
+            timestamp: string | null;
+          })[]
+        ).map((l) => ({
+          ...l,
+          timestamp: l.timestamp ? new Date(l.timestamp) : null,
+        })),
       };
       setData(parsed);
     } catch (e) {
@@ -200,12 +205,18 @@ export const Hero = () => {
   useEffect(() => {
     const channel = supabase
       .channel('leads-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
-        load();
-        setNow(new Date());
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leads' },
+        () => {
+          load();
+          setNow(new Date());
+        },
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -289,7 +300,9 @@ export const Hero = () => {
     if (!data) return [];
     const range = prevRangeFor(period, now);
     if (!range) return [];
-    return data.leads.filter((l) => l.timestamp !== null && isWithin(l.timestamp, range));
+    return data.leads.filter(
+      (l) => l.timestamp !== null && isWithin(l.timestamp, range),
+    );
   }, [data, now, period]);
 
   const primaryCount = hasFullCoverage ? primaryLeads.length : total;
@@ -306,13 +319,14 @@ export const Hero = () => {
 
   const periodDays = period === '7d' ? 7 : period === '14d' ? 14 : 1;
   const periodGoal = dailyGoal * periodDays;
-  const goalProgress = periodGoal > 0 ? Math.min(100, (primaryCount / periodGoal) * 100) : 0;
+  const goalProgress =
+    periodGoal > 0 ? Math.min(100, (primaryCount / periodGoal) * 100) : 0;
 
   const last7 = useMemo(() => leadsByDay(data?.leads ?? [], 7), [data]);
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
 
   const recent = useMemo(() => {
-    return (data?.leads ?? []).slice().sort((a, b) => b.rowIndex - a.rowIndex).slice(0, 6);
+    return (data?.leads ?? []).slice().sort((a, b) => b.rowIndex - a.rowIndex);
   }, [data]);
 
   const byFaturamento = useMemo(
@@ -345,7 +359,7 @@ export const Hero = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 bg-emerald-500 text-white rounded-2xl shadow-2xl shadow-emerald-500/40 pointer-events-none"
+            className="pointer-events-none fixed top-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-500 px-5 py-3 text-white shadow-2xl shadow-emerald-500/40"
           >
             <UsersThreeIcon size={18} weight="bold" />
             <span className="text-sm font-black">
@@ -355,234 +369,286 @@ export const Hero = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      <section className="min-h-screen bg-brand-dark-blue text-white px-6 md:px-10 py-8 md:py-10">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-          <div className="flex items-center gap-4">
-            <Image
-              src="/images/sdw-logo-gold.png"
-              alt="SDW.hub"
-              width={56}
-              height={56}
-              priority
-              className="h-12 w-auto"
-            />
-            <div>
-              <span className="text-brand-cream font-black uppercase tracking-[0.3em] text-[10px] block">
-                SDW.hub 2026 | Dashboard Em Tempo Real
-              </span>
-              <h1 className="font-display text-2xl md:text-3xl font-black uppercase tracking-tighter">
-                Leads Meta Ads
-              </h1>
-            </div>
-          </div>
+      <section className="relative min-h-screen overflow-hidden bg-brand-dark-blue px-6 py-8 text-white md:px-10 md:py-10">
+        {/* Background Desktop */}
+        <div className="pointer-events-none absolute inset-0 z-0 hidden md:block" style={{ height: '100%' }}>
+          <Image
+            src="/images/desktop.JPG"
+            alt=""
+            fill
+            sizes="100vw"
+            className="scale-110 object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-brand-dark-blue/30 backdrop-blur-sm" />
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div
-              role="tablist"
-              aria-label="Filtro de período"
-              className="w-full md:w-auto flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-1 p-1 bg-white/5 border border-white/10 rounded-full"
-            >
-              {PERIOD_ORDER.map((p) => {
-                const active = period === p;
-                return (
-                  <button
-                    key={p}
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setPeriod(p)}
-                    className={cn(
-                      'relative shrink-0 px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] rounded-full transition-colors',
-                      active
-                        ? 'text-brand-dark-blue'
-                        : 'text-white/60 hover:text-white',
-                    )}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="period-pill"
-                        className="absolute inset-0 bg-brand-cream rounded-full"
-                        transition={{
-                          type: 'spring',
-                          stiffness: 380,
-                          damping: 30,
-                        }}
-                      />
-                    )}
-                    <span className="relative z-10 flex flex-col items-center gap-px leading-tight">
-                      <span>{PERIOD_LABELS[p]}</span>
-                      <span className="text-[7px] font-bold normal-case tracking-wide opacity-60">
-                        {formatPeriodRange(p, now)}
+        {/* Background Mobile */}
+        <div className="pointer-events-none absolute inset-0 z-0 block md:hidden" style={{ height: '100%' }}>
+          <Image
+            src="/images/mobile.JPG"
+            alt=""
+            fill
+            sizes="100vw"
+            className="scale-110 object-cover"
+            priority
+          />
+          <div className="absolute inset-0 bg-brand-dark-blue/30 backdrop-blur-sm" />
+        </div>
+
+        <div className="relative z-10">
+          <header className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-center">
+            <div className="flex items-center gap-4">
+              <Image
+                src="/images/sdw-logo-gold.png"
+                alt="SDW.hub"
+                width={56}
+                height={56}
+                priority
+                className="h-12 w-auto"
+              />
+              <div>
+                <span className="block text-[10px] font-black tracking-[0.3em] text-brand-cream uppercase">
+                  SDW.hub 2026 | Dashboard Em Tempo Real
+                </span>
+                <h1 className="font-display text-2xl font-black tracking-tighter uppercase md:text-3xl">
+                  Leads Meta Ads
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                role="tablist"
+                aria-label="Filtro de período"
+                className="flex w-full gap-1 overflow-x-auto rounded-full border border-white/10 bg-white/5 p-1 [scrollbar-width:none] md:w-auto [&::-webkit-scrollbar]:hidden"
+              >
+                {PERIOD_ORDER.map((p) => {
+                  const active = period === p;
+                  return (
+                    <button
+                      key={p}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setPeriod(p)}
+                      className={cn(
+                        'relative shrink-0 rounded-full px-4 py-2 text-[10px] font-black tracking-[0.18em] uppercase transition-colors',
+                        active
+                          ? 'text-brand-dark-blue'
+                          : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="period-pill"
+                          className="absolute inset-0 rounded-full bg-brand-cream"
+                          transition={{
+                            type: 'spring',
+                            stiffness: 380,
+                            damping: 30,
+                          }}
+                        />
+                      )}
+                      <span className="relative z-10 flex flex-col items-center gap-px leading-tight">
+                        <span>{PERIOD_LABELS[p]}</span>
+                        <span className="text-[7px] font-bold tracking-wide normal-case opacity-60">
+                          {formatPeriodRange(p, now)}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
 
-            <div ref={settingsBtnRef} className="relative">
+              <div ref={settingsBtnRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsOpen((o) => !o);
+                    if (
+                      typeof window !== 'undefined' &&
+                      'Notification' in window
+                    ) {
+                      setNotifPermission(Notification.permission);
+                    }
+                  }}
+                  aria-label="Configurações de notificação"
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors',
+                    notifEnabled && notifPermission === 'granted'
+                      ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+                      : 'border-white/10 bg-white/5 text-white/60 hover:text-white',
+                  )}
+                >
+                  {notifEnabled && notifPermission === 'granted' ? (
+                    <BellIcon size={12} weight="bold" />
+                  ) : (
+                    <BellSlashIcon size={12} weight="bold" />
+                  )}
+                  <span className="hidden sm:inline">Notificações</span>
+                </button>
+
+                <AnimatePresence>
+                  {settingsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 380,
+                        damping: 30,
+                      }}
+                      className="absolute top-full right-0 z-50 mt-2 w-72 rounded-2xl border border-white/10 bg-[#0d0d1f] p-4 shadow-2xl"
+                    >
+                      <p className="mb-4 text-[9px] font-black tracking-[0.3em] text-white/40 uppercase">
+                        Configurações
+                      </p>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-white">
+                            Notificações de leads
+                          </p>
+                          <p className="mt-0.5 text-[10px] leading-relaxed font-medium text-white/40">
+                            {typeof window !== 'undefined' &&
+                            !('Notification' in window)
+                              ? 'Não suportado neste browser.'
+                              : notifPermission === 'denied'
+                                ? 'Bloqueado. Habilite nas configurações do site.'
+                                : notifPermission === 'granted'
+                                  ? notifEnabled
+                                    ? 'Alertas de novos leads ativados.'
+                                    : 'Alertas desativados.'
+                                  : 'Clique para ativar e permitir alertas.'}
+                          </p>
+                        </div>
+
+                        <button
+                          role="switch"
+                          aria-checked={
+                            notifEnabled && notifPermission === 'granted'
+                          }
+                          onClick={handleToggleNotif}
+                          disabled={notifPermission === 'denied'}
+                          className={cn(
+                            'relative h-6 w-11 flex-shrink-0 rounded-full transition-colors duration-200',
+                            notifEnabled && notifPermission === 'granted'
+                              ? 'bg-emerald-500'
+                              : notifPermission === 'denied'
+                                ? 'cursor-not-allowed bg-white/10 opacity-50'
+                                : 'bg-white/20 hover:bg-white/30',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-1 left-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+                              notifEnabled && notifPermission === 'granted'
+                                ? 'translate-x-5'
+                                : 'translate-x-0',
+                            )}
+                          />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <button
                 type="button"
                 onClick={() => {
-                  setSettingsOpen((o) => !o);
-                  if (
-                    typeof window !== 'undefined' &&
-                    'Notification' in window
-                  ) {
-                    setNotifPermission(Notification.permission);
-                  }
+                  setLoading(true);
+                  load();
                 }}
-                aria-label="Configurações de notificação"
-                className={cn(
-                  'inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full transition-colors border',
-                  notifEnabled && notifPermission === 'granted'
-                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25'
-                    : 'bg-white/5 border-white/10 text-white/60 hover:text-white',
-                )}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-full bg-brand-purple px-4 py-2 text-[10px] font-black tracking-[0.2em] uppercase transition-colors hover:bg-brand-purple-dark disabled:opacity-60"
               >
-                {notifEnabled && notifPermission === 'granted' ? (
-                  <BellIcon size={12} weight="bold" />
-                ) : (
-                  <BellSlashIcon size={12} weight="bold" />
-                )}
-                <span className="hidden sm:inline">Notificações</span>
+                <motion.span
+                  animate={loading ? { rotate: 360 } : { rotate: 0 }}
+                  transition={
+                    loading
+                      ? { repeat: Infinity, duration: 1, ease: 'linear' }
+                      : undefined
+                  }
+                >
+                  <ArrowsClockwiseIcon size={12} weight="bold" />
+                </motion.span>
+                Atualizar
               </button>
-
-              <AnimatePresence>
-                {settingsOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    className="absolute right-0 top-full mt-2 w-72 bg-[#0d0d1f] border border-white/10 rounded-2xl p-4 shadow-2xl z-50"
-                  >
-                    <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 mb-4">
-                      Configurações
-                    </p>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-white">
-                          Notificações de leads
-                        </p>
-                        <p className="text-[10px] text-white/40 font-medium leading-relaxed mt-0.5">
-                          {typeof window !== 'undefined' &&
-                          !('Notification' in window)
-                            ? 'Não suportado neste browser.'
-                            : notifPermission === 'denied'
-                              ? 'Bloqueado. Habilite nas configurações do site.'
-                              : notifPermission === 'granted'
-                                ? notifEnabled
-                                  ? 'Alertas de novos leads ativados.'
-                                  : 'Alertas desativados.'
-                                : 'Clique para ativar e permitir alertas.'}
-                        </p>
-                      </div>
-
-                      <button
-                        role="switch"
-                        aria-checked={
-                          notifEnabled && notifPermission === 'granted'
-                        }
-                        onClick={handleToggleNotif}
-                        disabled={notifPermission === 'denied'}
-                        className={cn(
-                          'relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200',
-                          notifEnabled && notifPermission === 'granted'
-                            ? 'bg-emerald-500'
-                            : notifPermission === 'denied'
-                              ? 'bg-white/10 cursor-not-allowed opacity-50'
-                              : 'bg-white/20 hover:bg-white/30',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200',
-                            notifEnabled && notifPermission === 'granted'
-                              ? 'translate-x-5'
-                              : 'translate-x-0',
-                          )}
-                        />
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
+          </header>
 
-            <button
-              type="button"
-              onClick={() => {
-                setLoading(true);
-                load();
-              }}
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] rounded-full bg-brand-purple hover:bg-brand-purple-dark transition-colors disabled:opacity-60"
-            >
-              <motion.span
-                animate={loading ? { rotate: 360 } : { rotate: 0 }}
-                transition={
-                  loading
-                    ? { repeat: Infinity, duration: 1, ease: 'linear' }
-                    : undefined
-                }
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-3 text-rose-200"
               >
-                <ArrowsClockwiseIcon size={12} weight="bold" />
-              </motion.span>
-              Atualizar
-            </button>
-          </div>
-        </header>
+                <WarningCircleIcon size={18} weight="duotone" />
+                <span className="text-xs font-semibold">{error}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-6 flex items-start gap-3 px-5 py-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-200"
-            >
+          {!hasTimestamp && data && (
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-3 text-amber-200">
               <WarningCircleIcon size={18} weight="duotone" />
-              <span className="text-xs font-semibold">{error}</span>
-            </motion.div>
+              <span className="text-xs font-semibold">
+                Adicione a coluna <code className="font-mono">Timestamp</code>{' '}
+                na planilha para liberar filtros por período. Métricas exibem o
+                total geral até lá.
+              </span>
+            </div>
           )}
-        </AnimatePresence>
 
-        {!hasTimestamp && data && (
-          <div className="mb-6 flex items-start gap-3 px-5 py-3 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
-            <WarningCircleIcon size={18} weight="duotone" />
-            <span className="text-xs font-semibold">
-              Adicione a coluna <code className="font-mono">Timestamp</code> na
-              planilha para liberar filtros por período. Métricas exibem o total
-              geral até lá.
-            </span>
-          </div>
-        )}
-
-        {timestampEmpty && (
-          <div className="mb-6 flex items-start gap-3 px-5 py-4 bg-amber-400/10 border border-amber-400/30 rounded-2xl text-amber-200">
-            <WarningCircleIcon size={20} weight="duotone" className="shrink-0 mt-0.5" />
-            <div className="text-xs font-semibold leading-relaxed space-y-2">
-              <p>
-                Coluna <code className="font-mono bg-white/10 px-1 rounded">Timestamp</code> detectada,
-                mas todas as {total} linhas estão sem data — filtros por dia estão desativados.
-              </p>
-              <p className="text-white/80">
-                Corrija em <strong>uma</strong> das formas abaixo:
-              </p>
-              <ol className="list-decimal list-inside space-y-1 text-white/70 font-normal">
-                <li>
-                  <strong className="text-white/90">Typebot (ideal):</strong> no bloco Google Sheets,
-                  adicione o campo <code className="font-mono bg-white/10 px-1 rounded">Timestamp</code> com
-                  o valor <code className="font-mono bg-white/10 px-1 rounded">{"{{now}}"}</code>.
-                </li>
-                <li>
-                  <strong className="text-white/90">Apps Script (automático):</strong> na planilha, vá em
-                  Extensões → Apps Script, cole o código abaixo e execute{' '}
-                  <code className="font-mono bg-white/10 px-1 rounded">setup()</code> uma vez:
-                </li>
-              </ol>
-              <pre className="mt-1 p-2 bg-black/30 rounded text-[10px] font-mono text-white/60 overflow-x-auto whitespace-pre leading-relaxed">{`function setup() {
+          {timestampEmpty && (
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-4 text-amber-200">
+              <WarningCircleIcon
+                size={20}
+                weight="duotone"
+                className="mt-0.5 shrink-0"
+              />
+              <div className="space-y-2 text-xs leading-relaxed font-semibold">
+                <p>
+                  Coluna{' '}
+                  <code className="rounded bg-white/10 px-1 font-mono">
+                    Timestamp
+                  </code>{' '}
+                  detectada, mas todas as {total} linhas estão sem data —
+                  filtros por dia estão desativados.
+                </p>
+                <p className="text-white/80">
+                  Corrija em <strong>uma</strong> das formas abaixo:
+                </p>
+                <ol className="list-inside list-decimal space-y-1 font-normal text-white/70">
+                  <li>
+                    <strong className="text-white/90">Typebot (ideal):</strong>{' '}
+                    no bloco Google Sheets, adicione o campo{' '}
+                    <code className="rounded bg-white/10 px-1 font-mono">
+                      Timestamp
+                    </code>{' '}
+                    com o valor{' '}
+                    <code className="rounded bg-white/10 px-1 font-mono">
+                      {'{{now}}'}
+                    </code>
+                    .
+                  </li>
+                  <li>
+                    <strong className="text-white/90">
+                      Apps Script (automático):
+                    </strong>{' '}
+                    na planilha, vá em Extensões → Apps Script, cole o código
+                    abaixo e execute{' '}
+                    <code className="rounded bg-white/10 px-1 font-mono">
+                      setup()
+                    </code>{' '}
+                    uma vez:
+                  </li>
+                </ol>
+                <pre className="mt-1 overflow-x-auto rounded bg-black/30 p-2 font-mono text-[10px] leading-relaxed whitespace-pre text-white/60">{`function setup() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('fillMissing').forSpreadsheet(SpreadsheetApp.getActive()).onChange().create();
   ScriptApp.newTrigger('fillMissing').timeBased().everyMinutes(1).create();
@@ -599,240 +665,243 @@ function fillMissing() {
   vals.forEach(r => { if (!r[0]) { r[0] = now; changed = true; } });
   if (changed) rng.setValues(vals);
 }`}</pre>
+              </div>
             </div>
+          )}
+
+          {/* KPI Row */}
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <KpiCard
+              label={PERIOD_KPI_LABELS[period].main}
+              value={primaryCount}
+              subValue={formatPeriodRange(period, now)}
+              icon={<UsersThreeIcon size={18} weight="bold" />}
+              accent="bg-brand-purple"
+              loading={loading && !data}
+              delay={0}
+              flash={toastCount > 0}
+            />
+            <KpiCard
+              label={PERIOD_KPI_LABELS[period].compare}
+              value={`${primaryCount}`}
+              subValue={
+                canFilterByDate && period !== 'all'
+                  ? `Período anterior: ${compareCount}`
+                  : timestampEmpty
+                    ? 'Backfill pendente'
+                    : 'Sem coluna de data'
+              }
+              icon={<TrendIcon size={18} weight="bold" />}
+              accent={
+                trend === 'up'
+                  ? 'bg-emerald-500'
+                  : trend === 'down'
+                    ? 'bg-rose-500'
+                    : 'bg-white/20'
+              }
+              delta={
+                canFilterByDate && period !== 'all' ? trendDelta : undefined
+              }
+              loading={loading && !data}
+              delay={0.05}
+            />
+            <KpiCard
+              label={PERIOD_GOAL_LABELS[period]}
+              value={`${primaryCount}/${periodGoal}`}
+              subValue={`${goalProgress.toFixed(0)}% concluído`}
+              icon={<TargetIcon size={18} weight="bold" />}
+              accent="bg-brand-cream text-brand-dark-blue"
+              progress={goalProgress}
+              loading={loading && !data}
+              delay={0.1}
+            />
           </div>
-        )}
 
-        {/* KPI Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <KpiCard
-            label={PERIOD_KPI_LABELS[period].main}
-            value={primaryCount}
-            subValue={formatPeriodRange(period, now)}
-            icon={<UsersThreeIcon size={18} weight="bold" />}
-            accent="bg-brand-purple"
-            loading={loading && !data}
-            delay={0}
-            flash={toastCount > 0}
-          />
-          <KpiCard
-            label={PERIOD_KPI_LABELS[period].compare}
-            value={`${primaryCount}`}
-            subValue={
-              canFilterByDate && period !== 'all'
-                ? `Período anterior: ${compareCount}`
-                : timestampEmpty
-                  ? 'Backfill pendente'
-                  : 'Sem coluna de data'
-            }
-            icon={<TrendIcon size={18} weight="bold" />}
-            accent={
-              trend === 'up'
-                ? 'bg-emerald-500'
-                : trend === 'down'
-                  ? 'bg-rose-500'
-                  : 'bg-white/20'
-            }
-            delta={canFilterByDate && period !== 'all' ? trendDelta : undefined}
-            loading={loading && !data}
-            delay={0.05}
-          />
-          <KpiCard
-            label={PERIOD_GOAL_LABELS[period]}
-            value={`${primaryCount}/${periodGoal}`}
-            subValue={`${goalProgress.toFixed(0)}% concluído`}
-            icon={<TargetIcon size={18} weight="bold" />}
-            accent="bg-brand-cream text-brand-dark-blue"
-            progress={goalProgress}
-            loading={loading && !data}
-            delay={0.1}
-          />
-        </div>
-
-        {/* Bottom row: 3 panels */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Bar chart - Leads / day */}
-          <Panel
-            title="Leads / dia"
-            subtitle={formatPeriodRange('7d', now)}
-            delay={0.2}
-          >
-            {!canFilterByDate ? (
-              <p className="text-white/40 text-xs font-medium leading-relaxed">
-                {timestampEmpty
-                  ? 'Coluna Timestamp vazia — preencha as linhas para ativar o histórico diário.'
-                  : 'Adicione a coluna Timestamp para visualizar o histórico diário.'}
-              </p>
-            ) : (
-              <div className="flex items-end justify-between gap-2 h-40 mt-4">
-                {last7.map((d) => {
-                  const heightPct = (d.count / maxBar) * 100;
-                  return (
-                    <div
-                      key={d.day.toISOString()}
-                      className="flex-1 flex flex-col items-center gap-2"
-                    >
-                      <div className="relative w-full flex-1 flex items-end">
-                        <motion.div
-                          initial={{ height: 0 }}
-                          animate={{ height: `${heightPct}%` }}
-                          transition={{ duration: 0.8, ease, delay: 0.3 }}
-                          className="w-full bg-gradient-to-t from-brand-purple to-brand-cream rounded-t-md min-h-[2px]"
-                        />
-                        {d.count > 0 && (
-                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black text-brand-cream">
-                            {d.count}
-                          </span>
-                        )}
+          {/* Bottom row: 3 panels */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {/* Bar chart - Leads / day */}
+            <Panel
+              title="Leads / dia"
+              subtitle={formatPeriodRange('7d', now)}
+              delay={0.2}
+            >
+              {!canFilterByDate ? (
+                <p className="text-xs leading-relaxed font-medium text-white/40">
+                  {timestampEmpty
+                    ? 'Coluna Timestamp vazia — preencha as linhas para ativar o histórico diário.'
+                    : 'Adicione a coluna Timestamp para visualizar o histórico diário.'}
+                </p>
+              ) : (
+                <div className="mt-4 flex h-40 items-end justify-between gap-2">
+                  {last7.map((d) => {
+                    const heightPct = (d.count / maxBar) * 100;
+                    return (
+                      <div
+                        key={d.day.toISOString()}
+                        className="flex flex-1 flex-col items-center gap-2"
+                      >
+                        <div className="relative flex w-full flex-1 items-end">
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${heightPct}%` }}
+                            transition={{ duration: 0.8, ease, delay: 0.3 }}
+                            className="min-h-[2px] w-full rounded-t-md bg-gradient-to-t from-brand-purple to-brand-cream"
+                          />
+                          {d.count > 0 && (
+                            <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] font-black text-brand-cream">
+                              {d.count}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[9px] font-black tracking-wider text-white/40 uppercase">
+                          {d.label}
+                        </span>
                       </div>
-                      <span className="text-[9px] font-black uppercase tracking-wider text-white/40">
-                        {d.label}
+                    );
+                  })}
+                </div>
+              )}
+            </Panel>
+
+            {/* Recently created */}
+            <Panel
+              title="Leads recentes"
+              subtitle="Ordenados por chegada"
+              delay={0.25}
+            >
+              <ul className="mt-2 max-h-72 space-y-3 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
+                {recent.length === 0 && (
+                  <li className="text-xs font-medium text-white/40">
+                    Nenhum lead ainda.
+                  </li>
+                )}
+                {recent.map((lead, i) => {
+                  const isNew = newLeadIds.has(lead.rowIndex);
+                  return (
+                    <motion.li
+                      key={`${lead.rowIndex}-${lead.nome}`}
+                      initial={{
+                        opacity: 0,
+                        x: isNew ? 0 : -10,
+                        backgroundColor: isNew
+                          ? 'rgba(16,185,129,0.15)'
+                          : 'rgba(0,0,0,0)',
+                      }}
+                      animate={{
+                        opacity: 1,
+                        x: 0,
+                        backgroundColor: 'rgba(0,0,0,0)',
+                      }}
+                      transition={{
+                        opacity: {
+                          duration: 0.4,
+                          delay: isNew ? 0 : 0.3 + i * 0.05,
+                          ease,
+                        },
+                        x: {
+                          duration: 0.4,
+                          delay: isNew ? 0 : 0.3 + i * 0.05,
+                          ease,
+                        },
+                        backgroundColor: { duration: 3, ease: 'easeOut' },
+                      }}
+                      className="-mx-1 flex items-center justify-between gap-3 rounded-lg border-b border-white/5 px-1 pb-3 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-white">
+                          {lead.nome || '—'}
+                        </p>
+                        <p className="truncate text-[11px] font-medium text-white/40">
+                          {lead.redeSocial || lead.email || '—'}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-wider whitespace-nowrap text-brand-cream uppercase">
+                        <ClockIcon size={11} weight="bold" />
+                        {canFilterByDate
+                          ? formatTimeHMS(lead.timestamp)
+                          : `#${lead.rowIndex + 1}`}
                       </span>
-                    </div>
+                    </motion.li>
                   );
                 })}
-              </div>
-            )}
-          </Panel>
+              </ul>
+            </Panel>
 
-          {/* Recently created */}
-          <Panel
-            title="Leads recentes"
-            subtitle="Ordenados por chegada"
-            delay={0.25}
-          >
-            <ul className="space-y-3 mt-2">
-              {recent.length === 0 && (
-                <li className="text-white/40 text-xs font-medium">
-                  Nenhum lead ainda.
-                </li>
-              )}
-              {recent.map((lead, i) => {
-                const isNew = newLeadIds.has(lead.rowIndex);
-                return (
-                  <motion.li
-                    key={`${lead.rowIndex}-${lead.nome}`}
-                    initial={{
-                      opacity: 0,
-                      x: isNew ? 0 : -10,
-                      backgroundColor: isNew
-                        ? 'rgba(16,185,129,0.15)'
-                        : 'rgba(0,0,0,0)',
-                    }}
-                    animate={{
-                      opacity: 1,
-                      x: 0,
-                      backgroundColor: 'rgba(0,0,0,0)',
-                    }}
-                    transition={{
-                      opacity: {
-                        duration: 0.4,
-                        delay: isNew ? 0 : 0.3 + i * 0.05,
-                        ease,
-                      },
-                      x: {
-                        duration: 0.4,
-                        delay: isNew ? 0 : 0.3 + i * 0.05,
-                        ease,
-                      },
-                      backgroundColor: { duration: 3, ease: 'easeOut' },
-                    }}
-                    className="flex items-center justify-between gap-3 pb-3 border-b border-white/5 last:border-0 rounded-lg -mx-1 px-1"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-sm text-white truncate">
-                        {lead.nome || '—'}
-                      </p>
-                      <p className="text-[11px] text-white/40 font-medium truncate">
-                        {lead.redeSocial || lead.email || '—'}
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-brand-cream whitespace-nowrap">
-                      <ClockIcon size={11} weight="bold" />
-                      {canFilterByDate
-                        ? formatTimeHMS(lead.timestamp)
-                        : `#${lead.rowIndex + 1}`}
-                    </span>
-                  </motion.li>
-                );
-              })}
-            </ul>
-          </Panel>
-
-          {/* Distribution by faturamento */}
-          <Panel
-            title="Por faturamento"
-            subtitle={`${primaryCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
-            delay={0.3}
-          >
-            <ul className="space-y-3 mt-2">
-              {byFaturamento.length === 0 && (
-                <li className="text-white/40 text-xs font-medium">
-                  Sem dados no período.
-                </li>
-              )}
-              {byFaturamento.map((entry, i) => {
-                const pct = (entry.count / maxFat) * 100;
-                return (
-                  <li key={entry.label} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-white/80 font-semibold truncate">
-                        {entry.label}
-                      </span>
-                      <span className="text-brand-cream font-black">
-                        {entry.count}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{
-                          duration: 0.8,
-                          delay: 0.35 + i * 0.05,
-                          ease,
-                        }}
-                        className="h-full bg-gradient-to-r from-brand-purple via-brand-rose to-brand-cream rounded-full"
-                      />
-                    </div>
+            {/* Distribution by faturamento */}
+            <Panel
+              title="Por faturamento"
+              subtitle={`${primaryCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
+              delay={0.3}
+            >
+              <ul className="mt-2 space-y-3">
+                {byFaturamento.length === 0 && (
+                  <li className="text-xs font-medium text-white/40">
+                    Sem dados no período.
                   </li>
-                );
-              })}
-            </ul>
+                )}
+                {byFaturamento.map((entry, i) => {
+                  const pct = (entry.count / maxFat) * 100;
+                  return (
+                    <li key={entry.label} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate font-semibold text-white/80">
+                          {entry.label}
+                        </span>
+                        <span className="font-black text-brand-cream">
+                          {entry.count}
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pct}%` }}
+                          transition={{
+                            duration: 0.8,
+                            delay: 0.35 + i * 0.05,
+                            ease,
+                          }}
+                          className="h-full rounded-full bg-gradient-to-r from-brand-purple via-brand-rose to-brand-cream"
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
 
-            {byMercado.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-white/5">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40 block mb-3">
-                  Top mercados
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {byMercado.map((m) => (
-                    <span
-                      key={m.label}
-                      className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] font-bold"
-                    >
-                      {m.label}
-                      <span className="text-brand-cream font-black">
-                        {m.count}
+              {byMercado.length > 0 && (
+                <div className="mt-6 border-t border-white/5 pt-4">
+                  <span className="mb-3 block text-[9px] font-black tracking-[0.3em] text-white/40 uppercase">
+                    Top mercados
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {byMercado.map((m) => (
+                      <span
+                        key={m.label}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold"
+                      >
+                        {m.label}
+                        <span className="font-black text-brand-cream">
+                          {m.count}
+                        </span>
                       </span>
-                    </span>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </Panel>
-        </div>
+              )}
+            </Panel>
+          </div>
 
-        <footer className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
-          <span>Total geral: {total} leads</span>
-          <span>Sincronização automática a cada {REFRESH_MS / 1000}s</span>
-          <span>
-            Última atualização:{' '}
-            <span className="text-brand-cream">
-              {formatTimeAgo(data?.fetchedAt ?? null, now)}
+          <footer className="mt-6 flex flex-col items-center justify-between gap-2 text-[10px] font-black tracking-[0.3em] text-white/30 uppercase sm:flex-row">
+            <span>Total geral: {total} leads</span>
+            <span>Sincronização automática a cada {REFRESH_MS / 1000}s</span>
+            <span>
+              Última atualização:{' '}
+              <span className="text-brand-cream">
+                {formatTimeAgo(data?.fetchedAt ?? null, now)}
+              </span>
             </span>
-          </span>
-        </footer>
+          </footer>
+        </div>
       </section>
     </>
   );
@@ -844,6 +913,7 @@ type KpiCardProps = {
   subValue?: string;
   icon?: React.ReactNode;
   accent?: string;
+  bgClass?: string;
   delta?: number;
   progress?: number;
   loading?: boolean;
@@ -857,6 +927,7 @@ const KpiCard = ({
   subValue,
   icon,
   accent = 'bg-brand-purple',
+  bgClass,
   delta,
   progress,
   loading,
@@ -872,15 +943,18 @@ const KpiCard = ({
       'relative rounded-2xl p-[1.5px]',
     )}
   >
-    <div className="relative bg-[#1d1b3f] rounded-[14px] p-5 overflow-hidden h-full">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/40">
+    <div className="relative h-full overflow-hidden rounded-[14px] bg-[#1d1b3f] p-5">
+      {bgClass && (
+        <div className={cn('pointer-events-none absolute inset-0', bgClass)} />
+      )}
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-[9px] font-black tracking-[0.3em] text-white/40 uppercase">
           {label}
         </span>
         {icon && (
           <span
             className={cn(
-              'w-9 h-9 rounded-full flex items-center justify-center',
+              'flex h-9 w-9 items-center justify-center rounded-full',
               accent,
             )}
           >
@@ -892,8 +966,8 @@ const KpiCard = ({
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            'font-display text-4xl md:text-5xl font-black tracking-tighter leading-none',
-            loading && 'opacity-40 animate-pulse',
+            'font-display text-4xl leading-none font-black tracking-tighter md:text-5xl',
+            loading && 'animate-pulse opacity-40',
           )}
         >
           {value}
@@ -912,18 +986,18 @@ const KpiCard = ({
       </div>
 
       {subValue && (
-        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/40">
+        <p className="mt-2 text-[10px] font-bold tracking-wider text-white/40 uppercase">
           {subValue}
         </p>
       )}
 
       {typeof progress === 'number' && (
-        <div className="mt-3 h-1 bg-white/10 rounded-full overflow-hidden">
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${Math.min(100, progress)}%` }}
             transition={{ duration: 0.8, delay: delay + 0.2, ease }}
-            className="h-full bg-brand-cream rounded-full"
+            className="h-full rounded-full bg-brand-cream"
           />
         </div>
       )}
@@ -945,13 +1019,13 @@ const Panel = ({ title, subtitle, children, delay = 0 }: PanelProps) => (
     transition={{ duration: 0.6, delay, ease }}
     className="shimmer-border relative rounded-2xl p-[1.5px]"
   >
-    <div className="bg-[#1d1b3f] rounded-[14px] p-5 h-full">
+    <div className="h-full rounded-[14px] bg-[#1d1b3f] p-5">
       <div className="mb-2">
-        <h3 className="font-display font-black uppercase tracking-tighter text-base">
+        <h3 className="font-display text-base font-black tracking-tighter uppercase">
           {title}
         </h3>
         {subtitle && (
-          <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+          <p className="text-[10px] font-bold tracking-wider text-white/40 uppercase">
             {subtitle}
           </p>
         )}
