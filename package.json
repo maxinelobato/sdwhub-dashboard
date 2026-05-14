@@ -18,6 +18,7 @@
     "clsx": "latest",
     "embla-carousel-autoplay": "latest",
     "embla-carousel-react": "latest",
+    "googleapis": "^171.4.0",
     "motion": "latest",
     "next": "latest",
     "react": "latest",

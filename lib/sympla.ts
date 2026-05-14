@@ -74,7 +74,7 @@ async function buildUtmMap(eventId: string, token: string): Promise<Map<string, 
   );
 }
 
-export async function fetchAllParticipants(): Promise<ParticipantWithUtm[]> {
+export async function fetchAllParticipants(since?: Date): Promise<ParticipantWithUtm[]> {
   const token = process.env.SYMPLA_API_TOKEN!;
   const eventId = process.env.SYMPLA_EVENT_ID!;
 
@@ -83,7 +83,15 @@ export async function fetchAllParticipants(): Promise<ParticipantWithUtm[]> {
     buildUtmMap(eventId, token),
   ]);
 
-  return participants.map((p) => ({
+  const filtered = since
+    ? participants.filter((p) => {
+        const dateStr = p.order_approved_date ?? p.order_date;
+        if (!dateStr) return false;
+        return new Date(dateStr) >= since;
+      })
+    : participants;
+
+  return filtered.map((p) => ({
     ...p,
     utm_source: utmMap.get(p.order_id)?.utm_source ?? '',
     utm_content: utmMap.get(p.order_id)?.utm_content ?? '',

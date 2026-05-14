@@ -327,7 +327,12 @@ export const Hero = () => {
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
 
   const recent = useMemo(() => {
-    return (data?.leads ?? []).slice().sort((a, b) => b.rowIndex - a.rowIndex);
+    return (data?.leads ?? []).slice().sort((a, b) => {
+      const ta = a.timestamp?.getTime() ?? 0;
+      const tb = b.timestamp?.getTime() ?? 0;
+      if (tb !== ta) return tb - ta;
+      return b.rowIndex - a.rowIndex;
+    });
   }, [data]);
 
   const byFaturamento = useMemo(
