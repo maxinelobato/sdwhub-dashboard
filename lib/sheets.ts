@@ -34,6 +34,8 @@ export type Lead = {
   objetivo: string;
   pretendeParticipar: string;
   motivacao: string;
+  utmSource: string;
+  utmContent: string;
   raw: Record<string, string>;
 };
 
@@ -189,6 +191,8 @@ export function rowsToLeads(rows: string[][]): ParsedLeads {
       objetivo: cell(idxObjetivo),
       pretendeParticipar: cell(idxPretende),
       motivacao: cell(idxMotivo),
+      utmSource: '',
+      utmContent: '',
       raw,
     };
   });

@@ -35,6 +35,7 @@ import {
   addDays,
   formatTimeAgo,
   formatTimeHMS,
+  formatDateShort,
   type PeriodKey,
 } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
@@ -371,28 +372,18 @@ export const Hero = () => {
       </AnimatePresence>
       <section className="relative min-h-screen overflow-hidden bg-brand-dark-blue px-6 py-8 text-white md:px-10 md:py-10">
         {/* Background Desktop */}
-        <div className="pointer-events-none absolute inset-0 z-0 hidden md:block" style={{ height: '100%' }}>
-          <Image
-            src="/images/desktop.JPG"
-            alt=""
-            fill
-            sizes="100vw"
-            className="scale-110 object-cover"
-            priority
-          />
+        <div
+          className="pointer-events-none absolute inset-0 z-0 hidden scale-110 bg-cover bg-center md:block"
+          style={{ backgroundImage: 'url(/images/desktop.JPG)' }}
+        >
           <div className="absolute inset-0 bg-brand-dark-blue/30 backdrop-blur-sm" />
         </div>
 
         {/* Background Mobile */}
-        <div className="pointer-events-none absolute inset-0 z-0 block md:hidden" style={{ height: '100%' }}>
-          <Image
-            src="/images/mobile.JPG"
-            alt=""
-            fill
-            sizes="100vw"
-            className="scale-110 object-cover"
-            priority
-          />
+        <div
+          className="pointer-events-none absolute inset-0 z-0 block scale-110 bg-cover bg-center md:hidden"
+          style={{ backgroundImage: 'url(/images/mobile.JPG)' }}
+        >
           <div className="absolute inset-0 bg-brand-dark-blue/30 backdrop-blur-sm" />
         </div>
 
@@ -808,12 +799,31 @@ function fillMissing() {
                       className="-mx-1 flex items-center justify-between gap-3 rounded-lg border-b border-white/5 px-1 pb-3 last:border-0"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-white">
-                          {lead.nome || '—'}
-                        </p>
-                        <p className="truncate text-[11px] font-medium text-white/40">
-                          {lead.redeSocial || lead.email || '—'}
-                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <p className="truncate text-sm font-bold text-white">
+                            {lead.nome || '—'}
+                          </p>
+                          {lead.timestamp && (
+                            <span className="shrink-0 text-[9px] font-bold text-white/30">
+                              {formatDateShort(lead.timestamp)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          <p className="truncate text-[11px] font-medium text-white/40">
+                            {lead.redeSocial || lead.email || '—'}
+                          </p>
+                          {lead.utmSource && (
+                            <span className="inline-flex items-center rounded-full bg-brand-purple/20 px-1.5 py-px text-[8px] font-black tracking-wider text-brand-purple uppercase">
+                              {lead.utmSource}
+                            </span>
+                          )}
+                          {lead.utmContent && (
+                            <span className="inline-flex items-center rounded-full bg-brand-rose/20 px-1.5 py-px text-[8px] font-black tracking-wider text-brand-rose uppercase">
+                              {lead.utmContent}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-wider whitespace-nowrap text-brand-cream uppercase">
                         <ClockIcon size={11} weight="bold" />

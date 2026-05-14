@@ -16,29 +16,21 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sdwhub.com.br';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'SDW.hub 2026 | Dashboard Em tempo real.',
-    template: '%s | SDW.hub 2026',
+    default: 'bh-typebot | Dashboard Em tempo real.',
+    template: '%s | bh-typebot',
   },
   description:
-    'Painel em tempo real dos leads do SDW.hub 2026: total do dia e comparativo.',
+    'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
   robots: { index: false, follow: false },
   keywords: [
-    'SDW.hub',
-    'Santos Digital Week',
-    'evento de negócios',
-    'inovação',
-    'tecnologia',
-    'Baixada Santista',
-    'networking empresarial',
-    'SDW Club',
-    'empreendedorismo',
+    'bh-typebot',
     'dashboard real time',
     'dashboard em tempo real',
     'dash tempo real',
   ],
   authors: [{ name: 'SDW Labs' }],
   creator: 'SDW Labs',
-  publisher: 'SDW.hub',
+  publisher: 'bh-typebot',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
@@ -60,10 +52,10 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'pt_BR',
     url: siteUrl,
-    siteName: 'SDW.hub 2026',
-    title: 'SDW.hub 2026 | Dashboard Em tempo real — Santos Digital Week',
+    siteName: 'bh-typebot',
+    title: 'bh-typebot | Dashboard Em tempo real',
     description:
-      'O maior evento de negócios, inovação e tecnologia da Baixada Santista.',
+      'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
     images: [
       {
         url: '/images/sdw-logo-purple.png',
@@ -75,9 +67,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SDW.hub 2026 | Dashboard Em tempo real',
+    title: 'bh-typebot | Dashboard Em tempo real',
     description:
-      'O maior evento de negócios, inovação e tecnologia da Baixada Santista.',
+      'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
     images: ['/images/sdw-logo-purple.png'],
   },
   alternates: {
