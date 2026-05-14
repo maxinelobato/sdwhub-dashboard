@@ -71,6 +71,12 @@ export async function syncLeadsToSheet(leads: Lead[]): Promise<{ updated: number
 
   const rows = [HEADERS, ...leads.map(leadToRow)];
 
+  // Limpa a aba antes de reescrever para remover linhas de leads excluídos
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `'${tabName}'!A:P`,
+  });
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range,
