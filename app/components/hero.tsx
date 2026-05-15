@@ -215,13 +215,16 @@ export const Hero = () => {
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
 
   const recent = useMemo(() => {
-    return primaryLeads.slice().sort((a, b) => {
-      const ta = a.timestamp?.getTime() ?? 0;
-      const tb = b.timestamp?.getTime() ?? 0;
-      if (tb !== ta) return tb - ta;
-      return b.rowIndex - a.rowIndex;
-    });
-  }, [primaryLeads]);
+    return (data?.leads ?? [])
+      .filter((l) => l.timestamp !== null)
+      .sort((a, b) => {
+        const ta = a.timestamp!.getTime();
+        const tb = b.timestamp!.getTime();
+        if (tb !== ta) return tb - ta;
+        return b.rowIndex - a.rowIndex;
+      })
+      .slice(0, 25);
+  }, [data]);
 
   const byUtmSource = useMemo(() => topBy(primaryLeads, 'utmSource', 5), [primaryLeads]);
   const byFonte = useMemo(() => topBy(primaryLeads, 'fonte', 5), [primaryLeads]);
