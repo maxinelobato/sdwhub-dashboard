@@ -187,7 +187,6 @@ export const Hero = () => {
   const total = data?.totalRows ?? 0;
   const timestampEmpty = hasTimestamp && total > 0 && withTimestamp === 0;
   const canFilterByDate = hasTimestamp && withTimestamp > 0;
-  const hasFullCoverage = hasTimestamp && total > 0 && withTimestamp >= total;
 
   const primaryLeads = useMemo(() => {
     if (!data) return [];
@@ -201,7 +200,7 @@ export const Hero = () => {
     return data.leads.filter((l) => l.timestamp !== null && isWithin(l.timestamp, range));
   }, [data, now, period]);
 
-  const primaryCount = hasFullCoverage ? primaryLeads.length : total;
+  const primaryCount = canFilterByDate ? primaryLeads.length : total;
   const compareCount = compareLeads.length;
   const trend: 'up' | 'down' | 'flat' =
     primaryCount > compareCount ? 'up' : primaryCount < compareCount ? 'down' : 'flat';
