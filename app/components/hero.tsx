@@ -215,17 +215,16 @@ export const Hero = () => {
   const maxBar = Math.max(1, ...last7.map((d) => d.count));
 
   const recent = useMemo(() => {
-    return (data?.leads ?? []).slice().sort((a, b) => {
+    return primaryLeads.slice().sort((a, b) => {
       const ta = a.timestamp?.getTime() ?? 0;
       const tb = b.timestamp?.getTime() ?? 0;
       if (tb !== ta) return tb - ta;
       return b.rowIndex - a.rowIndex;
     });
-  }, [data]);
+  }, [primaryLeads]);
 
-  const activeLeads = primaryLeads.length ? primaryLeads : (data?.leads ?? []);
-  const byUtmSource = useMemo(() => topBy(activeLeads, 'utmSource', 5), [activeLeads]);
-  const byFonte = useMemo(() => topBy(activeLeads, 'fonte', 5), [activeLeads]);
+  const byUtmSource = useMemo(() => topBy(primaryLeads, 'utmSource', 5), [primaryLeads]);
+  const byFonte = useMemo(() => topBy(primaryLeads, 'fonte', 5), [primaryLeads]);
   const maxUtm = Math.max(1, ...byUtmSource.map((e) => e.count));
 
   return (
@@ -548,7 +547,7 @@ function fillMissing() {
               />
             </Panel>
 
-            <Panel title="Leads recentes" subtitle="Ordenados por chegada" delay={0.25}>
+            <Panel title="Leads recentes" subtitle={`${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`} delay={0.25}>
               <RecentLeads
                 leads={recent}
                 newLeadIds={newLeadIds}
