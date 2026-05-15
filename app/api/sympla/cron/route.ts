@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
       const { data: existing } = await supabase
         .from('leads')
         .select('sympla_id')
-        .eq('fonte', 'sympla');
+        .eq('fonte', 'sympla')
+        .not('sympla_id', 'is', null);
 
       const toDelete = (existing ?? [])
         .map((r) => r.sympla_id as string)

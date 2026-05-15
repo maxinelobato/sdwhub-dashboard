@@ -46,9 +46,15 @@ function getAuth(eventId: EventId) {
   return new google.auth.JWT({ email: saEmail, key, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
 }
 
+function formatDateTime(date: Date | null): string {
+  if (!date) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
+}
+
 function leadToRow(lead: Lead): string[] {
   return [
-    lead.timestamp?.toISOString() ?? '',
+    formatDateTime(lead.timestamp),
     lead.ordemInscricao != null ? String(lead.ordemInscricao) : '',
     lead.nome,
     lead.sobrenome,
