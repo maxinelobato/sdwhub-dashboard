@@ -1,87 +1,83 @@
 import { google } from 'googleapis';
 import type { Lead } from './sheets';
+import type { EventId } from './event-config';
 
-const SPREADSHEET_ID = '1PlLN9PLB97ZIfahTThbH3-PwiZxxEB8RkPsd4tz87GY';
-const SHEET_GID = '2097604350';
+const SHEETS_CONFIG: Record<EventId, { spreadsheetId: string; sheetGid: string; saEmail: string; saKeyEnv: string }> = {
+  '3420900': {
+    spreadsheetId: '12j80r4_0WKyhJZZJtOS9QCZPgxGBfyWZXEb7yq68TaE',
+    sheetGid: '0',
+    saEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL_3420900 ?? '',
+    saKeyEnv: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_3420900 ?? '',
+  },
+  '3426453': {
+    spreadsheetId: '1PlLN9PLB97ZIfahTThbH3-PwiZxxEB8RkPsd4tz87GY',
+    sheetGid: '0',
+    saEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL_3426453 ?? '',
+    saKeyEnv: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_3426453 ?? '',
+  },
+};
+
+async function getSheetName(sheets: ReturnType<typeof google.sheets>, spreadsheetId: string, sheetGid: string): Promise<string> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const allSheets = meta.data.sheets ?? [];
+  const byGid = allSheets.find((s) => String(s.properties?.sheetId) === sheetGid);
+  const tab = byGid ?? allSheets[0];
+  if (!tab?.properties?.title) throw new Error(`Nenhuma aba encontrada na planilha ${spreadsheetId}`);
+  return tab.properties.title;
+}
 
 const HEADERS = [
-  'Timestamp',
+  'Data Compra',
+  'Ordem Inscrição',
   'Nome',
+  'Sobrenome',
   'WhatsApp',
-  'Email',
-  'Rede Social',
-  'Atuação',
-  'Mercado',
-  'Em Operação',
-  'Faturamento',
-  'Tamanho Equipe',
-  'Objetivo',
-  'Pretende Participar',
-  'Motivação',
   'UTM Source',
+  'UTM Campaign',
   'UTM Content',
+  'UTM Term',
   'Fonte',
 ];
 
-function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!email || !key) throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL ou GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY não configurados');
-
-  return new google.auth.JWT({
-    email,
-    key,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-}
-
-async function getSheetName(sheets: ReturnType<typeof google.sheets>, sheetGid: string): Promise<string> {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const tab = meta.data.sheets?.find((s) => String(s.properties?.sheetId) === sheetGid);
-  if (!tab?.properties?.title) throw new Error(`Aba com gid ${sheetGid} não encontrada`);
-  return tab.properties.title;
+function getAuth(eventId: EventId) {
+  const { saEmail, saKeyEnv } = SHEETS_CONFIG[eventId];
+  const key = saKeyEnv.replace(/\\n/g, '\n');
+  if (!saEmail || !key) throw new Error(`Credenciais Google não configuradas para evento ${eventId}`);
+  return new google.auth.JWT({ email: saEmail, key, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
 }
 
 function leadToRow(lead: Lead): string[] {
   return [
     lead.timestamp?.toISOString() ?? '',
+    lead.ordemInscricao != null ? String(lead.ordemInscricao) : '',
     lead.nome,
+    lead.sobrenome,
     lead.whatsapp,
-    lead.email,
-    lead.redeSocial,
-    lead.atuacao,
-    lead.mercado,
-    lead.emOperacao,
-    lead.faturamento,
-    lead.tamanhoEquipe,
-    lead.objetivo,
-    lead.pretendeParticipar,
-    lead.motivacao,
     lead.utmSource,
+    lead.utmCampaign,
     lead.utmContent,
-    'sympla',
+    lead.utmTerm,
+    lead.fonte,
   ];
 }
 
-export async function syncLeadsToSheet(leads: Lead[]): Promise<{ updated: number }> {
-  const auth = getAuth();
+export async function syncLeadsToSheet(leads: Lead[], eventId: EventId = '3420900'): Promise<{ updated: number }> {
+  const { spreadsheetId, sheetGid } = SHEETS_CONFIG[eventId];
+  const auth = getAuth(eventId);
   const sheets = google.sheets({ version: 'v4', auth });
-  const tabName = await getSheetName(sheets, SHEET_GID);
+  const tabName = await getSheetName(sheets, spreadsheetId, sheetGid);
   const range = `'${tabName}'!A1`;
 
-  const rows = [HEADERS, ...leads.map(leadToRow)];
-
-  // Limpa a aba antes de reescrever para remover linhas de leads excluídos
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `'${tabName}'!A:P`,
+    spreadsheetId,
+    range: `'${tabName}'!A:J`,
   });
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
     range,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: rows },
+    requestBody: { values: [HEADERS, ...leads.map(leadToRow)] },
   });
 
   return { updated: leads.length };

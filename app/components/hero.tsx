@@ -15,7 +15,8 @@ import {
   BellSlashIcon,
 } from '@phosphor-icons/react/ssr';
 import type { Lead, ParsedLeads } from '@/lib/sheets';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
+import { EVENT_CONFIG, EVENT_IDS, DEFAULT_EVENT_ID, type EventId } from '@/lib/event-config';
 import {
   PERIOD_LABELS,
   PERIOD_ORDER,
@@ -39,6 +40,7 @@ const REFRESH_MS = Number(process.env.NEXT_PUBLIC_REFRESH_SECONDS ?? 10) * 1000;
 
 export const Hero = () => {
   const [period, setPeriod] = useState<PeriodKey>('today');
+  const [eventId, setEventId] = useState<EventId>(DEFAULT_EVENT_ID);
   const [data, setData] = useState<ParsedLeads | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export const Hero = () => {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetch('/api/leads', { cache: 'no-store' });
+      const res = await fetch(`/api/leads?event=${eventId}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`Falha ao sincronizar (${res.status})`);
       const json = await res.json();
       if (json.error) throw new Error(json.error);
@@ -113,7 +115,7 @@ export const Hero = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [eventId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -123,14 +125,15 @@ export const Hero = () => {
   }, [load]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel('leads-realtime')
+    const client = getSupabaseClient(eventId);
+    const channel = client
+      .channel(`leads-realtime-${eventId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
         load(); setNow(new Date());
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [load]);
+    return () => { client.removeChannel(channel); };
+  }, [load, eventId]);
 
   useEffect(() => {
     if (!data) return;
@@ -222,9 +225,9 @@ export const Hero = () => {
   }, [data]);
 
   const activeLeads = primaryLeads.length ? primaryLeads : (data?.leads ?? []);
-  const byFaturamento = useMemo(() => topBy(activeLeads, 'faturamento', 5), [activeLeads]);
-  const byMercado = useMemo(() => topBy(activeLeads, 'mercado', 5), [activeLeads]);
-  const maxFat = Math.max(1, ...byFaturamento.map((e) => e.count));
+  const byUtmSource = useMemo(() => topBy(activeLeads, 'utmSource', 5), [activeLeads]);
+  const byFonte = useMemo(() => topBy(activeLeads, 'fonte', 5), [activeLeads]);
+  const maxUtm = Math.max(1, ...byUtmSource.map((e) => e.count));
 
   return (
     <>
@@ -285,6 +288,18 @@ export const Hero = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={eventId}
+                onChange={(e) => { setEventId(e.target.value as EventId); setData(null); setLoading(true); }}
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-black tracking-[0.18em] text-white/80 uppercase outline-none transition-colors hover:border-white/20 focus:border-brand-cream/40"
+              >
+                {EVENT_IDS.map((id) => (
+                  <option key={id} value={id} className="bg-[#0d0d1f] normal-case tracking-normal">
+                    {EVENT_CONFIG[id].label}
+                  </option>
+                ))}
+              </select>
+
               <div
                 role="tablist"
                 aria-label="Filtro de período"
@@ -543,14 +558,14 @@ function fillMissing() {
             </Panel>
 
             <Panel
-              title="Por faturamento"
+              title="Por origem"
               subtitle={`${primaryCount} leads · ${PERIOD_LABELS[period]} · ${formatPeriodRange(period, now)}`}
               delay={0.3}
             >
               <DistributionPanel
-                byFaturamento={byFaturamento}
-                byMercado={byMercado}
-                maxFat={maxFat}
+                byUtmSource={byUtmSource}
+                byFonte={byFonte}
+                maxUtm={maxUtm}
               />
             </Panel>
           </div>

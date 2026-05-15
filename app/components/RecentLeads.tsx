@@ -49,7 +49,7 @@ export const RecentLeads = ({ leads, newLeadIds, canFilterByDate }: Props) => (
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
               <p className="truncate text-[11px] font-medium text-white/40">
-                {lead.redeSocial || lead.email || '—'}
+                {lead.sobrenome || lead.whatsapp || '—'}
               </p>
               {lead.utmSource && (
                 <span className="inline-flex items-center rounded-full bg-brand-purple/20 px-1.5 py-px text-[8px] font-black tracking-wider text-brand-purple uppercase">

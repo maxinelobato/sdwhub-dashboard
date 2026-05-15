@@ -1,65 +1,48 @@
 import { NextResponse } from 'next/server';
-import { fetchLeads, type Lead } from '@/lib/sheets';
-import { supabaseAdmin } from '@/lib/supabase-server';
+import type { Lead } from '@/lib/sheets';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { DEFAULT_EVENT_ID, type EventId } from '@/lib/event-config';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-async function fetchSymplaLeads(offset: number): Promise<Lead[]> {
-  const { data, error } = await supabaseAdmin
-    .from('leads')
-    .select('*')
-    .eq('source', 'sympla')
-    .order('timestamp', { ascending: true });
-
-  if (error || !data) return [];
-
-  return data.map((row, i) => ({
-    rowIndex: offset + i + 1,
-    timestamp: row.timestamp ? new Date(row.timestamp) : null,
-    nome: row.nome ?? '',
-    whatsapp: row.whatsapp ?? '',
-    email: row.email ?? '',
-    redeSocial: row.rede_social ?? '',
-    atuacao: row.atuacao ?? '',
-    mercado: row.mercado ?? '',
-    emOperacao: row.em_operacao ?? '',
-    faturamento: row.faturamento ?? '',
-    tamanhoEquipe: row.tamanho_equipe ?? '',
-    objetivo: row.objetivo ?? '',
-    pretendeParticipar: row.pretende_participar ?? '',
-    motivacao: row.motivacao ?? '',
-    utmSource: row.utm_source ?? '',
-    utmContent: row.utm_content ?? '',
-    raw: {},
-  }));
-}
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const [sheetsData, symplaLeads] = await Promise.all([
-      fetchLeads(),
-      fetchSymplaLeads(0).catch(() => [] as Lead[]),
-    ]);
+    const { searchParams } = new URL(req.url);
+    const eventId = (searchParams.get('event') ?? DEFAULT_EVENT_ID) as EventId;
+    const supabase = getSupabaseAdmin(eventId);
 
-    const symplaWithOffset = symplaLeads.map((l, i) => ({
-      ...l,
-      rowIndex: sheetsData.totalRows + i + 1,
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*')
+      .order('data_compra', { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    const leads: Lead[] = (data ?? []).map((row, i) => ({
+      rowIndex: i,
+      timestamp: row.data_compra ? new Date(row.data_compra) : null,
+      ordemInscricao: row.ordem_inscricao ?? undefined,
+      nome: row.nome ?? '',
+      sobrenome: row.sobrenome ?? '',
+      whatsapp: row.whatsapp ?? '',
+      utmSource: row.utm_source ?? '',
+      utmCampaign: row.utm_campaign ?? '',
+      utmContent: row.utm_content ?? '',
+      utmTerm: row.utm_term ?? '',
+      fonte: row.fonte ?? '',
+      raw: {},
     }));
-
-    const allLeads = [...sheetsData.leads, ...symplaWithOffset];
 
     return NextResponse.json(
       {
-        leads: allLeads.map((l) => ({
+        leads: leads.map((l) => ({
           ...l,
           timestamp: l.timestamp?.toISOString() ?? null,
         })),
-        hasTimestamp:
-          sheetsData.hasTimestamp ||
-          symplaLeads.some((l) => l.timestamp !== null),
-        withTimestamp: allLeads.filter((l) => l.timestamp !== null).length,
-        totalRows: allLeads.length,
+        hasTimestamp: leads.some((l) => l.timestamp !== null),
+        withTimestamp: leads.filter((l) => l.timestamp !== null).length,
+        totalRows: leads.length,
         fetchedAt: new Date().toISOString(),
       },
       { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } },

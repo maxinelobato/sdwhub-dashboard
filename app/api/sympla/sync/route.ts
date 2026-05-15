@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-server';
+import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { fetchAllParticipants, participantToRow } from '@/lib/sympla';
 import { syncLeadsToSheet } from '@/lib/gsheets';
 import type { Lead } from '@/lib/sheets';
+import type { EventId } from '@/lib/event-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,29 +15,31 @@ export async function POST(req: NextRequest) {
 
   const sinceParam = req.nextUrl.searchParams.get('since');
   const since = sinceParam ? new Date(sinceParam) : new Date('2026-05-11');
+  const eventId = (req.nextUrl.searchParams.get('event_id') ?? process.env.SYMPLA_EVENT_ID_1 ?? '3420900') as EventId;
+
+  const supabase = getSupabaseAdmin(eventId);
 
   // Busca TODOS os participantes para detectar exclusões
-  const allParticipants = await fetchAllParticipants();
+  const allParticipants = await fetchAllParticipants(undefined, eventId);
   const activeIds = new Set(allParticipants.map((p) => String(p.id)));
 
-  // Remove do Supabase quem foi excluído no Sympla
-  const { data: existing } = await supabaseAdmin
-    .from('leads')
-    .select('sympla_id')
-    .eq('source', 'sympla');
-
-  const toDelete = (existing ?? [])
-    .map((r) => r.sympla_id as string)
-    .filter((id) => !activeIds.has(id));
-
+  // Guarda de segurança: só deleta se a API retornou pelo menos 1 participante
   let deleted = 0;
-  if (toDelete.length > 0) {
-    const { error: delError } = await supabaseAdmin
+  if (allParticipants.length > 0) {
+    const { data: existing } = await supabase
       .from('leads')
-      .delete()
-      .in('sympla_id', toDelete);
-    if (delError) console.error('[sympla/sync] delete error:', delError);
-    else deleted = toDelete.length;
+      .select('sympla_id')
+      .eq('fonte', 'sympla');
+
+    const toDelete = (existing ?? [])
+      .map((r) => r.sympla_id as string)
+      .filter((id) => !activeIds.has(id));
+
+    if (toDelete.length > 0) {
+      const { error: delError } = await supabase.from('leads').delete().in('sympla_id', toDelete);
+      if (delError) console.error('[sympla/sync] delete error:', delError);
+      else deleted = toDelete.length;
+    }
   }
 
   // Upsert apenas participantes dentro do período
@@ -46,46 +49,41 @@ export async function POST(req: NextRequest) {
     return new Date(dateStr) >= since;
   });
 
-  const rows = toSync.map(participantToRow);
+  const rows = toSync.map((p) => participantToRow(p, eventId));
 
   if (rows.length > 0) {
-    const { error } = await supabaseAdmin
-      .from('leads')
-      .upsert(rows, { onConflict: 'sympla_id' });
+    const { error } = await supabase.from('leads').upsert(rows, { onConflict: 'sympla_id' });
     if (error) {
       console.error('[sympla/sync] upsert error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
 
-  // Atualiza Google Sheets com o estado atual (sem excluídos)
+  // Atualiza Google Sheets com o estado atual
   const leads: Lead[] = rows.map((r, i) => ({
     rowIndex: i,
-    timestamp: r.timestamp ? new Date(r.timestamp) : null,
+    timestamp: r.data_compra ? new Date(r.data_compra as string) : null,
+    ordemInscricao: r.ordem_inscricao ?? undefined,
     nome: r.nome ?? '',
+    sobrenome: r.sobrenome ?? '',
     whatsapp: r.whatsapp ?? '',
-    email: r.email ?? '',
-    redeSocial: r.rede_social ?? '',
-    atuacao: r.atuacao ?? '',
-    mercado: r.mercado ?? '',
-    emOperacao: r.em_operacao ?? '',
-    faturamento: r.faturamento ?? '',
-    tamanhoEquipe: r.tamanho_equipe ?? '',
-    objetivo: r.objetivo ?? '',
-    pretendeParticipar: r.pretende_participar ?? '',
-    motivacao: r.motivacao ?? '',
     utmSource: r.utm_source ?? '',
+    utmCampaign: r.utm_campaign ?? '',
     utmContent: r.utm_content ?? '',
+    utmTerm: r.utm_term ?? '',
+    fonte: r.fonte ?? 'sympla',
     raw: {},
   }));
 
   let sheetsUpdated = 0;
+  let sheetsError: string | null = null;
   try {
-    const result = await syncLeadsToSheet(leads);
+    const result = await syncLeadsToSheet(leads, eventId);
     sheetsUpdated = result.updated;
   } catch (err) {
+    sheetsError = err instanceof Error ? err.message : String(err);
     console.error('[sympla/sync] sheets error:', err);
   }
 
-  return NextResponse.json({ ok: true, synced: rows.length, deleted, sheets: sheetsUpdated });
+  return NextResponse.json({ ok: true, synced: rows.length, deleted, sheets: sheetsUpdated, sheetsError });
 }

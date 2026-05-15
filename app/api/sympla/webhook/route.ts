@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   const payload = body as {
     data?: {
-      order?: { utm?: { utm_source?: string; utm_content?: string } };
+      order?: { utm?: { utm_source?: string; utm_campaign?: string; utm_content?: string; utm_term?: string } };
       participants?: SymplaParticipant[];
     };
   };
@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
   const rows = participants.map((p) =>
     participantToRow({
       ...p,
-      utm_source: orderUtm.utm_source?.trim() ?? '',
-      utm_content: orderUtm.utm_content?.trim() ?? '',
+      utm_source:   orderUtm.utm_source?.trim()   ?? '',
+      utm_campaign: orderUtm.utm_campaign?.trim() ?? '',
+      utm_content:  orderUtm.utm_content?.trim()  ?? '',
+      utm_term:     orderUtm.utm_term?.trim()     ?? '',
     }),
   );
 

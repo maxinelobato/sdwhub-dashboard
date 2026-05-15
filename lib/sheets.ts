@@ -20,22 +20,17 @@ import { fetcher } from './fetcher';
 
 export type Lead = {
   rowIndex: number;
-  /** Disponível apenas se a planilha tiver coluna Timestamp/Data. */
+  /** Data de compra / inscrição */
   timestamp: Date | null;
+  ordemInscricao?: number;
   nome: string;
+  sobrenome: string;
   whatsapp: string;
-  email: string;
-  redeSocial: string;
-  atuacao: string;
-  mercado: string;
-  emOperacao: string;
-  faturamento: string;
-  tamanhoEquipe: string;
-  objetivo: string;
-  pretendeParticipar: string;
-  motivacao: string;
   utmSource: string;
+  utmCampaign: string;
   utmContent: string;
+  utmTerm: string;
+  fonte: string;
   raw: Record<string, string>;
 };
 
@@ -157,17 +152,13 @@ export function rowsToLeads(rows: string[][]): ParsedLeads {
     headersLower.findIndex((h) => h.includes(label.toLowerCase()));
 
   const idxNome = colIndex('nome');
+  const idxSobrenome = colIndex('sobrenome');
   const idxWhats = colIndex('whatsapp');
-  const idxEmail = colIndex('email');
-  const idxRede = colIndex('rede social');
-  const idxAtuacao = headersLower.findIndex((h) => h.includes('atuação'));
-  const idxMercado = headersLower.findIndex((h) => h.includes('mercado'));
-  const idxOperacao = headersLower.findIndex((h) => h.includes('operação'));
-  const idxFaturamento = headersLower.findIndex((h) => h.includes('faturamento'));
-  const idxEquipe = headersLower.findIndex((h) => h.includes('pessoas') || h.includes('operação hoje'));
-  const idxObjetivo = headersLower.findIndex((h) => h.includes('objetivo'));
-  const idxPretende = headersLower.findIndex((h) => h.includes('pretende'));
-  const idxMotivo = headersLower.findIndex((h) => h.includes('acredita') || h.includes('motivo'));
+  const idxUtmSource = headersLower.findIndex((h) => h === 'utm source' || h === 'utm_source');
+  const idxUtmCampaign = headersLower.findIndex((h) => h === 'utm campaign' || h === 'utm_campaign');
+  const idxUtmContent = headersLower.findIndex((h) => h === 'utm content' || h === 'utm_content');
+  const idxUtmTerm = headersLower.findIndex((h) => h === 'utm term' || h === 'utm_term');
+  const idxFonte = colIndex('fonte');
 
   const leads: Lead[] = rows.slice(1).map((row, i) => {
     const cell = (idx: number) => (idx >= 0 ? row[idx]?.trim() ?? '' : '');
@@ -180,19 +171,13 @@ export function rowsToLeads(rows: string[][]): ParsedLeads {
       rowIndex: i,
       timestamp: hasTimestamp ? toDate(row[tsIdx] ?? '') : null,
       nome: cell(idxNome),
+      sobrenome: cell(idxSobrenome),
       whatsapp: cell(idxWhats),
-      email: cell(idxEmail),
-      redeSocial: cell(idxRede),
-      atuacao: cell(idxAtuacao),
-      mercado: cell(idxMercado),
-      emOperacao: cell(idxOperacao),
-      faturamento: cell(idxFaturamento),
-      tamanhoEquipe: cell(idxEquipe),
-      objetivo: cell(idxObjetivo),
-      pretendeParticipar: cell(idxPretende),
-      motivacao: cell(idxMotivo),
-      utmSource: '',
-      utmContent: '',
+      utmSource: cell(idxUtmSource),
+      utmCampaign: cell(idxUtmCampaign),
+      utmContent: cell(idxUtmContent),
+      utmTerm: cell(idxUtmTerm),
+      fonte: cell(idxFonte) || 'typebot',
       raw,
     };
   });
@@ -209,9 +194,11 @@ export function rowsToLeads(rows: string[][]): ParsedLeads {
 
 /** Endpoint padrão: Sheets publicado via "Publicar na web > CSV". */
 export const DEFAULT_LEADS_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTfpU4XEsLcqY7jYF74-AKSzi9FGWfF-EuNmyp4D1y91Sob-no3SrNnoRQu8wcASwp9Cn9RKfAUhoBx/pub?gid=1054517737&single=true&output=csv';
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQhXqtu0vu4KkfDOK6D33bsTX5p2O88xYQgNFhXaAib2IW4kFeyPsltqq4KRbSjVQEEqgtk_T7mh2wR/pub?output=csv';
 
-export async function fetchLeads(url: string = DEFAULT_LEADS_CSV_URL): Promise<ParsedLeads> {
+export async function fetchLeads(
+  url: string = process.env.NEXT_PUBLIC_LEADS_CSV_URL ?? DEFAULT_LEADS_CSV_URL,
+): Promise<ParsedLeads> {
   const bustUrl = `${url}&t=${Date.now()}`;
   const csv = await fetcher<string>(bustUrl, {
     headers: { Accept: 'text/csv', 'Cache-Control': 'no-cache, no-store' },
