@@ -2,29 +2,20 @@ import { google } from 'googleapis';
 import type { Lead } from './sheets';
 import type { EventId } from './event-config';
 
-const SHEETS_CONFIG: Record<EventId, { spreadsheetId: string; sheetGid: string; saEmail: string; saKeyEnv: string }> = {
+const SHEETS_CONFIG: Record<EventId, { spreadsheetId: string; tabName: string; saEmail: string; saKeyEnv: string }> = {
   '3420900': {
     spreadsheetId: '12j80r4_0WKyhJZZJtOS9QCZPgxGBfyWZXEb7yq68TaE',
-    sheetGid: '0',
+    tabName: 'sympla',
     saEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL_3420900 ?? '',
     saKeyEnv: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_3420900 ?? '',
   },
   '3426453': {
     spreadsheetId: '1PlLN9PLB97ZIfahTThbH3-PwiZxxEB8RkPsd4tz87GY',
-    sheetGid: '0',
+    tabName: 'sympla-ab',
     saEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL_3426453 ?? '',
     saKeyEnv: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY_3426453 ?? '',
   },
 };
-
-async function getSheetName(sheets: ReturnType<typeof google.sheets>, spreadsheetId: string, sheetGid: string): Promise<string> {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const allSheets = meta.data.sheets ?? [];
-  const byGid = allSheets.find((s) => String(s.properties?.sheetId) === sheetGid);
-  const tab = byGid ?? allSheets[0];
-  if (!tab?.properties?.title) throw new Error(`Nenhuma aba encontrada na planilha ${spreadsheetId}`);
-  return tab.properties.title;
-}
 
 const HEADERS = [
   'Data Compra',
@@ -68,15 +59,14 @@ function leadToRow(lead: Lead): string[] {
 }
 
 export async function syncLeadsToSheet(leads: Lead[], eventId: EventId = '3420900'): Promise<{ updated: number }> {
-  const { spreadsheetId, sheetGid } = SHEETS_CONFIG[eventId];
+  const { spreadsheetId, tabName } = SHEETS_CONFIG[eventId];
   const auth = getAuth(eventId);
   const sheets = google.sheets({ version: 'v4', auth });
-  const tabName = await getSheetName(sheets, spreadsheetId, sheetGid);
-  const range = `'${tabName}'!A1`;
+  const range = `${tabName}!A1`;
 
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: `'${tabName}'!A:J`,
+    range: `${tabName}!A:J`,
   });
 
   await sheets.spreadsheets.values.update({

@@ -7,6 +7,23 @@ import type { EventId } from '@/lib/event-config';
 
 export const dynamic = 'force-dynamic';
 
+function dbRowToLead(row: Record<string, unknown>, i: number): Lead {
+  return {
+    rowIndex: i,
+    timestamp: row.data_compra ? new Date(row.data_compra as string) : null,
+    ordemInscricao: (row.ordem_inscricao as number) ?? undefined,
+    nome: (row.nome as string) ?? '',
+    sobrenome: (row.sobrenome as string) ?? '',
+    whatsapp: (row.whatsapp as string) ?? '',
+    utmSource: (row.utm_source as string) ?? '',
+    utmCampaign: (row.utm_campaign as string) ?? '',
+    utmContent: (row.utm_content as string) ?? '',
+    utmTerm: (row.utm_term as string) ?? '',
+    fonte: (row.fonte as string) ?? 'sympla',
+    raw: {},
+  };
+}
+
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('authorization');
   if (auth !== `Bearer ${process.env.SYMPLA_WEBHOOK_SECRET}`) {
@@ -60,27 +77,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Atualiza Google Sheets com o estado atual
-  const leads: Lead[] = rows.map((r, i) => ({
-    rowIndex: i,
-    timestamp: r.data_compra ? new Date(r.data_compra as string) : null,
-    ordemInscricao: r.ordem_inscricao ?? undefined,
-    nome: r.nome ?? '',
-    sobrenome: r.sobrenome ?? '',
-    whatsapp: r.whatsapp ?? '',
-    utmSource: r.utm_source ?? '',
-    utmCampaign: r.utm_campaign ?? '',
-    utmContent: r.utm_content ?? '',
-    utmTerm: r.utm_term ?? '',
-    fonte: r.fonte ?? 'sympla',
-    raw: {},
-  }));
-
+  // Busca estado completo do Supabase para sincronizar com a planilha
   let sheetsUpdated = 0;
   let sheetsError: string | null = null;
   try {
-    const result = await syncLeadsToSheet(leads, eventId);
-    sheetsUpdated = result.updated;
+    const { data: allDbRows } = await supabase
+      .from('leads')
+      .select('*')
+      .order('data_compra', { ascending: true });
+
+    if (allDbRows && allDbRows.length > 0) {
+      const leads = allDbRows.map((r, i) => dbRowToLead(r, i));
+      const result = await syncLeadsToSheet(leads, eventId);
+      sheetsUpdated = result.updated;
+    }
   } catch (err) {
     sheetsError = err instanceof Error ? err.message : String(err);
     console.error('[sympla/sync] sheets error:', err);
