@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "optimize-images": "node scripts/optimize-images.mjs",
-    "build": "node scripts/optimize-images.mjs && node --max-old-space-size=1536 node_modules/next/dist/bin/next build",
+    "build": "node scripts/optimize-images.mjs && node --max-old-space-size=4096 node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write ."

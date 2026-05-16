@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ['@phosphor-icons/react', 'motion'],
+    workerThreads: false,
+    cpus: 1,
   },
   async headers() {
     return [
