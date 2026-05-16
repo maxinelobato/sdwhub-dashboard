@@ -16,5 +16,3 @@ export function getSupabaseClient(eventId: EventId = '3420900') {
   return clients.get(eventId)!;
 }
 
-// Compatibilidade com imports antigos
-export const supabase = getSupabaseClient('3420900');

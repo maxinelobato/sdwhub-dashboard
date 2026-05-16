@@ -17,5 +17,3 @@ export function getSupabaseAdmin(eventId: EventId = '3420900') {
   return createClient(url, serviceKey, { auth: { persistSession: false } });
 }
 
-// Compatibilidade com imports antigos
-export const supabaseAdmin = getSupabaseAdmin('3420900');
