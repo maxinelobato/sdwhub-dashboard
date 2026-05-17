@@ -58,11 +58,27 @@ function leadToRow(lead: Lead): string[] {
   ];
 }
 
+async function ensureTab(
+  sheets: ReturnType<typeof google.sheets>,
+  spreadsheetId: string,
+  tabName: string,
+): Promise<void> {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' });
+  const exists = (meta.data.sheets ?? []).some((s) => s.properties?.title === tabName);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: [{ addSheet: { properties: { title: tabName } } }] },
+    });
+  }
+}
+
 export async function syncLeadsToSheet(leads: Lead[], eventId: EventId = '3420900'): Promise<{ updated: number }> {
   const { spreadsheetId, tabName } = SHEETS_CONFIG[eventId];
   const auth = getAuth(eventId);
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${tabName}!A1`;
+
+  await ensureTab(sheets, spreadsheetId, tabName);
 
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
@@ -71,7 +87,7 @@ export async function syncLeadsToSheet(leads: Lead[], eventId: EventId = '342090
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range,
+    range: `${tabName}!A1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [HEADERS, ...leads.map(leadToRow)] },
   });
