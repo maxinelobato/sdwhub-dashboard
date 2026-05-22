@@ -16,21 +16,21 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sdwhub.com.br';
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'bh-typebot | Dashboard Em tempo real.',
-    template: '%s | bh-typebot',
+    default: 'SDW.hub | Dashboard Em tempo real.',
+    template: '%s | SDW.hub',
   },
   description:
-    'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
+    'Painel em tempo real dos leads do SDW.hub: total do dia e comparativo.',
   robots: { index: false, follow: false },
   keywords: [
-    'bh-typebot',
+    'SDW.hub',
     'dashboard real time',
     'dashboard em tempo real',
     'dash tempo real',
   ],
   authors: [{ name: 'SDW Labs' }],
   creator: 'SDW Labs',
-  publisher: 'bh-typebot',
+  publisher: 'SDW.hub',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
@@ -52,10 +52,10 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'pt_BR',
     url: siteUrl,
-    siteName: 'bh-typebot',
-    title: 'bh-typebot | Dashboard Em tempo real',
+    siteName: 'SDW.hub',
+    title: 'SDW.hub | Dashboard Em tempo real',
     description:
-      'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
+      'Painel em tempo real dos leads do SDW.hub: total do dia e comparativo.',
     images: [
       {
         url: '/images/sdw-logo-purple.png',
@@ -67,9 +67,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'bh-typebot | Dashboard Em tempo real',
+    title: 'SDW.hub | Dashboard Em tempo real',
     description:
-      'Painel em tempo real dos leads do bh-typebot: total do dia e comparativo.',
+      'Painel em tempo real dos leads do SDW.hub: total do dia e comparativo.',
     images: ['/images/sdw-logo-purple.png'],
   },
   alternates: {
