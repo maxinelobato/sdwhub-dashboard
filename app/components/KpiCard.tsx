@@ -50,7 +50,12 @@ export const KpiCard = ({
           {label}
         </span>
         {icon && (
-          <span className={cn('flex h-9 w-9 items-center justify-center rounded-full', accent)}>
+          <span
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full',
+              accent,
+            )}
+          >
             {icon}
           </span>
         )}
@@ -59,7 +64,7 @@ export const KpiCard = ({
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            'font-display text-4xl leading-none font-black tracking-tighter md:text-5xl',
+            'font-display text-3xl leading-none font-black tracking-tighter md:text-5xl',
             loading && 'animate-pulse opacity-40',
           )}
         >
@@ -72,7 +77,8 @@ export const KpiCard = ({
               delta > 0 ? 'text-emerald-400' : 'text-rose-400',
             )}
           >
-            {delta > 0 ? '+' : ''}{delta}
+            {delta > 0 ? '+' : ''}
+            {delta}
           </span>
         )}
       </div>

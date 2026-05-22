@@ -43,7 +43,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export const ReColumnChart = ({ data, colors = DEFAULT_COLORS, height = 180 }: Props) => {
   return (
     <div className="mt-3">
-      <ResponsiveContainer width="100%" height={height}>
+      <ResponsiveContainer width="100%" height={height} minWidth={0}>
         <BarChart
           data={data}
           margin={{ top: 20, right: 8, left: -24, bottom: 0 }}

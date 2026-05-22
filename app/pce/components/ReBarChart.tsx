@@ -47,7 +47,7 @@ export const ReBarChart = ({
 
   return (
     <div className="mt-3">
-      <ResponsiveContainer width="100%" height={items.length * 36 + 16}>
+      <ResponsiveContainer width="100%" height={items.length * 36 + 16} minWidth={0}>
         <BarChart
           data={items}
           layout="vertical"

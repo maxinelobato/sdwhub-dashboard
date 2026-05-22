@@ -1,6 +1,14 @@
 {
   "tailwindCSS.experimental.configFile": "app/globals.css",
-  "tailwindCSS.classAttributes": ["class", "className", "ngClass", "cn", "clsx", "cva"],
+  "tailwindCSS.classAttributes": ["class", "className", "ngClass"],
+  "tailwindCSS.experimental.classFunctions": ["cn", "clsx", "cva", "twMerge", "twJoin"],
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
