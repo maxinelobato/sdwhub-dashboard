@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MagnifyingGlassIcon } from '@phosphor-icons/react/ssr';
 import type { PCEParticipant } from '@/lib/pce-participants';
 import { cn } from '@/lib/utils';
 
 type Props = { participants: PCEParticipant[] };
+
+const PAGE_SIZE = 20;
 
 const FASE_CONFIG: Record<string, { short: string; cls: string }> = {
   'Empresa em crescimento acelerado': {
@@ -56,7 +58,9 @@ function ClarezaBadge({ value }: { value: number | null }) {
 }
 
 export const ParticipantsTable = ({ participants }: Props) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery]     = useState('');
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const sentinelRef           = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -69,6 +73,28 @@ export const ParticipantsTable = ({ participants }: Props) => {
         p.cidade.toLowerCase().includes(q),
     );
   }, [participants, query]);
+
+  // Reset visible count when filter changes
+  useEffect(() => { setVisible(PAGE_SIZE); }, [query]);
+
+  const loadMore = useCallback(() => {
+    setVisible((v) => Math.min(v + PAGE_SIZE, filtered.length));
+  }, [filtered.length]);
+
+  // IntersectionObserver: load next page when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore(); },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  const rows      = filtered.slice(0, visible);
+  const hasMore   = visible < filtered.length;
 
   return (
     <div className="mt-3 flex flex-col gap-3">
@@ -93,67 +119,84 @@ export const ParticipantsTable = ({ participants }: Props) => {
         )}
       </div>
 
-      {/* Table */}
+      {/* Scrollable container */}
       <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full min-w-[640px] text-left">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">#</th>
-              <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Nome</th>
-              <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Empresa</th>
-              <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase md:table-cell">Segmento</th>
-              <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase lg:table-cell">Cidade</th>
-              <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Fase</th>
-              <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase md:table-cell">Faturamento</th>
-              <th className="px-3 py-2 text-center text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Clareza</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((p, i) => (
-              <tr
-                key={`${p.nome}-${i}`}
-                className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/5"
-              >
-                <td className="px-3 py-2 text-[10px] font-bold text-white/20">{i + 1}</td>
-                <td className="px-3 py-2">
-                  <span className="text-[11px] font-bold text-white/90">{p.nome || '—'}</span>
-                </td>
-                <td className="px-3 py-2">
-                  <span className="text-[10px] font-medium text-white/60">
-                    {p.empresa && p.empresa.toLowerCase() !== 'ainda não tenho' && p.empresa.toLowerCase() !== 'não tenho empresa'
-                      ? p.empresa
-                      : <span className="text-white/20 italic">—</span>}
-                  </span>
-                </td>
-                <td className="hidden px-3 py-2 md:table-cell">
-                  <span className="text-[10px] font-medium text-white/60">{p.segmento || '—'}</span>
-                </td>
-                <td className="hidden px-3 py-2 lg:table-cell">
-                  <span className="text-[10px] font-medium text-white/50">{p.cidade || '—'}</span>
-                </td>
-                <td className="px-3 py-2">
-                  <FaseBadge fase={p.fase} />
-                </td>
-                <td className="hidden px-3 py-2 md:table-cell">
-                  <span className="text-[10px] font-medium text-white/60">{p.faturamento || '—'}</span>
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <ClarezaBadge value={p.clareza} />
-                </td>
+        {/* Fixed-height scroll area — thead stays sticky */}
+        <div className="max-h-[520px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.15)_transparent]">
+          <table className="w-full min-w-[640px] text-left">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-white/10 bg-[#1d1b3f]">
+                <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">#</th>
+                <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Nome</th>
+                <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Empresa</th>
+                <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase md:table-cell">Segmento</th>
+                <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase lg:table-cell">Cidade</th>
+                <th className="px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Fase</th>
+                <th className="hidden px-3 py-2 text-[9px] font-black tracking-[0.2em] text-white/40 uppercase md:table-cell">Faturamento</th>
+                <th className="px-3 py-2 text-center text-[9px] font-black tracking-[0.2em] text-white/40 uppercase">Clareza</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((p, i) => (
+                <tr
+                  key={`${p.nome}-${i}`}
+                  className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/5"
+                >
+                  <td className="px-3 py-2 text-[10px] font-bold text-white/20">{i + 1}</td>
+                  <td className="px-3 py-2">
+                    <span className="text-[11px] font-bold text-white/90">{p.nome || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="text-[10px] font-medium text-white/60">
+                      {p.empresa &&
+                      p.empresa.toLowerCase() !== 'ainda não tenho' &&
+                      p.empresa.toLowerCase() !== 'não tenho empresa' ? (
+                        p.empresa
+                      ) : (
+                        <span className="italic text-white/20">—</span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="hidden px-3 py-2 md:table-cell">
+                    <span className="text-[10px] font-medium text-white/60">{p.segmento || '—'}</span>
+                  </td>
+                  <td className="hidden px-3 py-2 lg:table-cell">
+                    <span className="text-[10px] font-medium text-white/50">{p.cidade || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <FaseBadge fase={p.fase} />
+                  </td>
+                  <td className="hidden px-3 py-2 md:table-cell">
+                    <span className="text-[10px] font-medium text-white/60">{p.faturamento || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <ClarezaBadge value={p.clareza} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        {filtered.length === 0 && (
-          <div className="py-8 text-center text-xs font-medium text-white/30">
-            Nenhum participante encontrado para "{query}".
-          </div>
-        )}
+          {filtered.length === 0 && (
+            <div className="py-8 text-center text-xs font-medium text-white/30">
+              Nenhum participante encontrado para &ldquo;{query}&rdquo;.
+            </div>
+          )}
+
+          {/* Sentinel — observed by IntersectionObserver to trigger loadMore */}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
+              <span className="h-1 w-1 animate-bounce rounded-full bg-white/20 [animation-delay:0ms]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-white/20 [animation-delay:150ms]" />
+              <span className="h-1 w-1 animate-bounce rounded-full bg-white/20 [animation-delay:300ms]" />
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Counter */}
       <p className="text-right text-[9px] font-bold tracking-wider text-white/20 uppercase">
-        {filtered.length} participante{filtered.length !== 1 ? 's' : ''}
+        {rows.length} de {filtered.length} participante{filtered.length !== 1 ? 's' : ''}
       </p>
     </div>
   );
